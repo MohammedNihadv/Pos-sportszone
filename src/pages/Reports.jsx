@@ -3,22 +3,7 @@ import {
 } from 'recharts';
 import { useApp } from '../context/AppContext';
 
-const monthlyData = [
-  { month: 'Oct', purchase: 72000, sales: 95000, profit: 23000 },
-  { month: 'Nov', purchase: 81000, sales: 108000, profit: 27000 },
-  { month: 'Dec', purchase: 95000, sales: 138000, profit: 43000 },
-  { month: 'Jan', purchase: 68000, sales: 98000, profit: 30000 },
-  { month: 'Feb', purchase: 77000, sales: 112000, profit: 35000 },
-  { month: 'Mar', purchase: 89720, sales: 124350, profit: 34630 },
-];
-
-const topItems = [
-  { name: 'Jersey 5 Collar',       qty: 62, revenue: 21700,  margin: '63%' },
-  { name: 'Boot Focus 2.0',         qty: 28, revenue: 22400,  margin: '78%' },
-  { name: 'Shorts PP',              qty: 95, revenue: 9500,   margin: '47%' },
-  { name: 'Knee Support (Impact)',  qty: 44, revenue: 4400,   margin: '67%' },
-  { name: 'Boot Sega Spectra',      qty: 18, revenue: 15480,  margin: '60%' },
-];
+import { useState, useEffect } from 'react';
 
 export default function Reports() {
   const { darkMode } = useApp();
@@ -26,7 +11,80 @@ export default function Reports() {
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
-  const current = monthlyData[monthlyData.length - 1];
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [topItems, setTopItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const s = window.api ? await window.api.getSales() : [];
+        const p = window.api ? await window.api.getPurchases() : [];
+
+        // Calculate last 6 months data
+        const months = {};
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+          months[key] = { month: d.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0, rawSales: [] };
+        }
+
+        s.forEach(sale => {
+          const d = new Date(sale.date);
+          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+          if (months[key]) {
+            months[key].sales += sale.total;
+            const cost = sale.items.reduce((sum, item) => sum + (item.cost || 0) * item.qty, 0);
+            months[key].profit += (sale.total - cost);
+            months[key].rawSales.push(sale);
+          }
+        });
+
+        p.forEach(purchase => {
+          const d = new Date(purchase.date);
+          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+          if (months[key]) {
+            months[key].purchase += purchase.total;
+          }
+        });
+
+        setMonthlyData(Object.values(months));
+
+        // Top items all-time or last 6 months
+        const itemStats = {};
+        s.forEach(sale => {
+          sale.items.forEach(item => {
+            if (!itemStats[item.name]) itemStats[item.name] = { name: item.name, qty: 0, revenue: 0, cost: 0 };
+            itemStats[item.name].qty += item.qty;
+            itemStats[item.name].revenue += (item.price * item.qty);
+            itemStats[item.name].cost += ((item.cost || 0) * item.qty);
+          });
+        });
+
+        const sortedItems = Object.values(itemStats)
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5)
+          .map(i => {
+             const m = i.revenue > 0 ? ((i.revenue - i.cost) / i.revenue) * 100 : 0;
+             return { ...i, margin: Math.round(m) + '%' };
+          });
+        setTopItems(sortedItems);
+
+      } catch (err) {
+        console.error(err);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const current = monthlyData.length > 0 ? monthlyData[monthlyData.length - 1] : { purchase: 0, sales: 0, profit: 0 };
+  const totalSalesAll = monthlyData.reduce((acc, curr) => acc + curr.sales, 0);
+  const totalPurchaseAll = monthlyData.reduce((acc, curr) => acc + curr.purchase, 0);
+  const totalProfitAll = monthlyData.reduce((acc, curr) => acc + curr.profit, 0);
+  const avgMargin = totalSalesAll > 0 ? ((totalProfitAll / totalSalesAll) * 100).toFixed(1) + '%' : '0%';
 
   return (
     <div className="p-6 space-y-5">
@@ -43,10 +101,10 @@ export default function Reports() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Purchase', value: current.purchase, color: 'red' },
-          { label: 'Total Sales', value: current.sales, color: 'blue' },
-          { label: 'Gross Profit', value: current.profit, color: 'green' },
-          { label: 'Profit Margin', value: `${((current.profit / current.sales) * 100).toFixed(1)}%`, color: 'purple', isText: true },
+          { label: 'Total Purchase', value: totalPurchaseAll, color: 'red' },
+          { label: 'Total Sales', value: totalSalesAll, color: 'blue' },
+          { label: 'Gross Profit', value: totalProfitAll, color: 'green' },
+          { label: 'Profit Margin', value: avgMargin, color: 'purple', isText: true },
         ].map(card2 => (
           <div key={card2.label} className={`${card} p-4`}>
             <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{card2.label}</p>
@@ -55,7 +113,7 @@ export default function Reports() {
               card2.color === 'green' ? 'text-green-600' :
               card2.color === 'purple' ? 'text-purple-600' : 'text-blue-600'
             }`}>
-              {card2.isText ? card2.value : `₹${card2.value.toLocaleString()}`}
+              {card2.isText ? card2.value : `₹${(card2.value || 0).toLocaleString()}`}
             </p>
           </div>
         ))}

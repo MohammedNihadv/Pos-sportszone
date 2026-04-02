@@ -129,4 +129,11 @@ export async function runFullSync(db) {
   return results;
 }
 
+export function startAutoSync(db) {
+  // Sync every 30 minutes
+  setInterval(() => {
+    runFullSync(db).catch(err => logError('AutoSync', err));
+  }, 30 * 60 * 1000);
+}
+
 export { getLastSyncTime };

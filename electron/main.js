@@ -7,7 +7,7 @@ import getDb, { initDb } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
-import { runFullSync, getLastSyncTime } from './cloudSync.js';
+import { runFullSync, getLastSyncTime, startAutoSync } from './cloudSync.js';
 import { downloadReceiptPDF } from './receipt.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +59,9 @@ app.whenReady().then(() => {
 
   // Auto-backup on startup
   try { autoBackup(); } catch (e) { logError('StartupBackup', e); }
+
+  // Auto-cloud-sync loop
+  try { startAutoSync(getDb()); } catch (e) { logError('StartupSync', e); }
 
   // Auto-updater (only in production)
   if (!isDev) {

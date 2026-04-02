@@ -24,7 +24,7 @@ const PAYMENT_METHODS = [
 const QUICK_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
 export default function CheckoutModal({ onClose, onComplete, dm }) {
-  const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal } = useCart();
+  const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal, clearCart } = useCart();
   // Step: 'method' → 'amount' → 'change' → 'success'
   const [step, setStep] = useState('method');
   const [payments, setPayments] = useState([]); // [{method, amount}]
@@ -817,12 +817,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                 </button>
                 <button
                   onClick={() => {
-                    const { clearCart } = require('../context/CartContext.jsx'); // dynamic require to avoid hook issues outside or just use useCart
-                    // Actually useCart is already accessed at line 27: const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal, clearCart } = useCart();
-                    // Wait, clearCart wasn't destructured! Let me ensure clearCart is destructured at line 27?
-                    // Safe approach: expose clearCart via window or trigger event. Better: update line 27.
-                    // But I can't update line 27 in this block. I'll just dispatch an event!
-                    window.dispatchEvent(new Event('clear-cart-event'));
+                    clearCart();
                     onClose();
                   }}
                   className="py-3 bg-blue-600 text-white rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 hover:bg-blue-700 transition-all"
