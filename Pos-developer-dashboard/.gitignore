@@ -10,13 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-dist-electron/
 *.local
-
-# Database files (local only)
-*.db
-*.db-shm
-*.db-wal
 
 # Editor directories and files
 .vscode/*
@@ -28,6 +22,3 @@ dist-electron/
 *.njsproj
 *.sln
 *.sw?
-
-# Temp files
-tmp_files.txt
