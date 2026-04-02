@@ -63,10 +63,12 @@ export function CartProvider({ children }) {
 
   const subtotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
   const discountAmount = Math.min(discount, subtotal);
-  const taxableAmount = subtotal - discountAmount;
-  const cgst = taxableAmount * TAX_RATE;
-  const sgst = taxableAmount * TAX_RATE;
-  const grandTotal = taxableAmount + cgst + sgst;
+  
+  // Tax-Inclusive Logic
+  const grandTotal = subtotal - discountAmount;
+  const taxableAmount = grandTotal / (1 + (TAX_RATE * 2));
+  const cgst = (grandTotal - taxableAmount) / 2;
+  const sgst = cgst;
 
   return (
     <CartContext.Provider value={{
