@@ -15,7 +15,7 @@ function App() {
     
     // Subscribe to realtime updates if needed
     const devicesSub = supabase.channel('custom-all-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'device_telemetry' }, payload => {
         fetchTelemetry();
       })
       .subscribe();
@@ -29,7 +29,7 @@ function App() {
     setLoading(true);
     
     const [devicesRes, errorsRes] = await Promise.all([
-      supabase.from('devices').select('*').order('last_seen', { ascending: false }),
+      supabase.from('device_telemetry').select('*').order('last_seen', { ascending: false }),
       supabase.from('developer_logs').select('*').order('occurred_at', { ascending: false }).limit(50)
     ]);
     
@@ -186,8 +186,8 @@ function App() {
                       {devices.map(device => {
                         const isOnline = new Date(device.last_seen) > oneDayAgo;
                         return (
-                          <tr key={device.id} className="border-b border-slate-50 hover:bg-slate-50">
-                            <td className="p-4 font-medium text-slate-800">{device.device_name || 'Unknown'}</td>
+                          <tr key={device.machine_id || device.id} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="p-4 font-medium text-slate-800">{device.hostname || 'Unknown'}</td>
                             <td className="p-4 text-slate-500">{device.os}</td>
                             <td className="p-4"><span className="px-2 py-1 bg-slate-100 rounded text-xs font-mono font-medium">{device.app_version}</span></td>
                             <td className="p-4 text-slate-500 whitespace-nowrap">

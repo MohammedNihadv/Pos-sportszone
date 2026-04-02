@@ -27,12 +27,18 @@ const getDeviceInfo = () => {
 
 export const syncDeviceTelemetry = async () => {
   try {
-    const deviceInfo = getDeviceInfo();
+    const deviceInfo = {
+      machine_id: deviceId,
+      app_version: app.getVersion(),
+      hostname: os.hostname(),
+      os: os.platform(),
+      last_seen: new Date().toISOString()
+    };
     
     // Upsert the device row
     const { error } = await supabase
-      .from('devices')
-      .upsert(deviceInfo, { onConflict: 'device_id' });
+      .from('device_telemetry')
+      .upsert(deviceInfo, { onConflict: 'machine_id' });
       
     if (error) {
       console.error("Failed to sync device telemetry to Supabase:", error);
