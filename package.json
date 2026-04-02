@@ -1,0 +1,84 @@
+{
+  "name": "pos-system",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Sports Zone POS — point-of-sale billing, inventory, and accounting for retail shops",
+  "author": "Sports Zone",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron": "wait-on http://localhost:5173 && electron .",
+    "start": "concurrently \"npm run dev\" \"npm run electron\"",
+    "build:react": "vite build",
+    "build:exe": "npm run build:react && electron-builder --win",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
+  },
+  "build": {
+    "appId": "com.sportszone.retail.pos",
+    "productName": "Sports Zone",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sports Zone",
+      "artifactName": "Sports Zone Setup ${version}.${ext}",
+      "uninstallDisplayName": "Sports Zone"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "MohammedNihadv",
+      "repo": "Pos-sportszone"
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "better-sqlite3": "^12.8.0",
+    "electron-is-dev": "^3.0.1",
+    "electron-updater": "^6.8.3",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^0.577.0",
+    "node-machine-id": "^1.1.12",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
+    "recharts": "^3.8.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "electron": "^41.0.4",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.0.1",
+    "wait-on": "^9.0.4"
+  }
+}

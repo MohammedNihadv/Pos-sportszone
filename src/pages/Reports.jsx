@@ -1,0 +1,136 @@
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Legend
+} from 'recharts';
+import { useApp } from '../context/AppContext';
+
+const monthlyData = [
+  { month: 'Oct', purchase: 72000, sales: 95000, profit: 23000 },
+  { month: 'Nov', purchase: 81000, sales: 108000, profit: 27000 },
+  { month: 'Dec', purchase: 95000, sales: 138000, profit: 43000 },
+  { month: 'Jan', purchase: 68000, sales: 98000, profit: 30000 },
+  { month: 'Feb', purchase: 77000, sales: 112000, profit: 35000 },
+  { month: 'Mar', purchase: 89720, sales: 124350, profit: 34630 },
+];
+
+const topItems = [
+  { name: 'Jersey 5 Collar',       qty: 62, revenue: 21700,  margin: '63%' },
+  { name: 'Boot Focus 2.0',         qty: 28, revenue: 22400,  margin: '78%' },
+  { name: 'Shorts PP',              qty: 95, revenue: 9500,   margin: '47%' },
+  { name: 'Knee Support (Impact)',  qty: 44, revenue: 4400,   margin: '67%' },
+  { name: 'Boot Sega Spectra',      qty: 18, revenue: 15480,  margin: '60%' },
+];
+
+export default function Reports() {
+  const { darkMode } = useApp();
+  const dm = darkMode;
+  const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
+  const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
+
+  const current = monthlyData[monthlyData.length - 1];
+
+  return (
+    <div className="p-6 space-y-5">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Reports & Analytics</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Business performance overview</p>
+        </div>
+        <select className={`px-3 py-2 rounded-lg text-sm border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}>
+          <option>Last 6 Months</option><option>This Year</option><option>Custom Range</option>
+        </select>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Purchase', value: current.purchase, color: 'red' },
+          { label: 'Total Sales', value: current.sales, color: 'blue' },
+          { label: 'Gross Profit', value: current.profit, color: 'green' },
+          { label: 'Profit Margin', value: `${((current.profit / current.sales) * 100).toFixed(1)}%`, color: 'purple', isText: true },
+        ].map(card2 => (
+          <div key={card2.label} className={`${card} p-4`}>
+            <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{card2.label}</p>
+            <p className={`text-2xl font-bold mt-1.5 ${
+              card2.color === 'red' ? 'text-red-500' :
+              card2.color === 'green' ? 'text-green-600' :
+              card2.color === 'purple' ? 'text-purple-600' : 'text-blue-600'
+            }`}>
+              {card2.isText ? card2.value : `₹${card2.value.toLocaleString()}`}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Trend Chart */}
+      <div className={`${card} p-5`}>
+        <h3 className={`font-semibold mb-0.5 ${dm ? 'text-white' : 'text-slate-800'}`}>Sales & Profit Trend</h3>
+        <p className={`text-xs mb-5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Monthly comparison over the last 6 months</p>
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+            <defs>
+              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={dm ? '#334155' : '#f1f5f9'} />
+            <XAxis dataKey="month" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ background: dm ? '#1e293b' : '#fff', border: `1px solid ${dm ? '#334155' : '#e2e8f0'}`, borderRadius: 10, color: dm ? '#f1f5f9' : '#1e293b' }} formatter={v => [`₹${v.toLocaleString()}`, '']} />
+            <Legend />
+            <Area type="monotone" dataKey="sales" name="Sales" stroke="#3b82f6" fill="url(#colorSales)" strokeWidth={2} animationDuration={800} />
+            <Area type="monotone" dataKey="profit" name="Profit" stroke="#10b981" fill="url(#colorProfit)" strokeWidth={2} animationDuration={800} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Monthly Compare Bar */}
+      <div className={`${card} p-5`}>
+        <h3 className={`font-semibold mb-0.5 ${dm ? 'text-white' : 'text-slate-800'}`}>Monthly Comparison</h3>
+        <p className={`text-xs mb-5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Purchase vs Sales each month</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={dm ? '#334155' : '#f1f5f9'} />
+            <XAxis dataKey="month" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ background: dm ? '#1e293b' : '#fff', border: `1px solid ${dm ? '#334155' : '#e2e8f0'}`, borderRadius: 10, color: dm ? '#f1f5f9' : '#1e293b' }} formatter={v => [`₹${v.toLocaleString()}`, '']} />
+            <Legend />
+            <Bar dataKey="purchase" name="Purchase" fill="#f87171" radius={[4, 4, 0, 0]} animationDuration={800} />
+            <Bar dataKey="sales" name="Sales" fill="#3b82f6" radius={[4, 4, 0, 0]} animationDuration={800} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Top Products Table */}
+      <div className={`${card} overflow-hidden`}>
+        <div className={`px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
+          <h3 className={`font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>Top Selling Products</h3>
+          <p className={`text-xs mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Best performers this period</p>
+        </div>
+        <table className="w-full text-sm">
+          <thead><tr className={`border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
+            <th className={th}>#</th><th className={th}>Product</th><th className={th + ' text-right'}>Qty Sold</th>
+            <th className={th + ' text-right'}>Revenue</th><th className={th + ' text-right'}>Margin</th>
+          </tr></thead>
+          <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
+            {topItems.map((item, i) => (
+              <tr key={item.name} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
+                <td className="px-5 py-3.5 text-slate-400 font-mono text-xs">{i + 1}</td>
+                <td className={`px-5 py-3.5 font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>{item.name}</td>
+                <td className={`px-5 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{item.qty}</td>
+                <td className="px-5 py-3.5 text-right font-bold text-blue-600">₹{item.revenue.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-right">
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold">{item.margin}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
