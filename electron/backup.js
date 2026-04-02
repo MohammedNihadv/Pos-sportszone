@@ -3,6 +3,7 @@ import path from 'path';
 import { app, dialog, shell } from 'electron';
 import isDev from 'electron-is-dev';
 import { logInfo, logError } from './logger.js';
+import { closeDb } from './db.js';
 
 function getBackupDirs() {
   if (isDev) {
@@ -134,6 +135,9 @@ export function restoreBackup(backupPath) {
       try { fs.copyFileSync(getDbPath(), path.join(dir, safetyName)); } catch(e){}
     });
     
+    // Crucial: Release SQLite lock on Windows before overwriting
+    closeDb();
+
     // Replace current DB with the chosen backup
     fs.copyFileSync(backupPath, getDbPath());
     

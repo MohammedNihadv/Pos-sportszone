@@ -180,3 +180,10 @@ export default function getDb() {
   if (!db) initDb();
   return db;
 }
+
+export function closeDb() {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
