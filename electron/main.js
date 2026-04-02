@@ -156,6 +156,10 @@ safeHandle('install-update', async () => {
   installUpdate();
   return true;
 });
+safeHandle('check-for-updates', async () => {
+  const { manualCheckForUpdates } = await import('./updater.js');
+  return await manualCheckForUpdates(mainWindow);
+});
 
 // ─── IPC: Authentication & Audit Logs ───
 safeHandle('verify-pin', (_, submittedPin) => {

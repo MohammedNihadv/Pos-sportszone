@@ -82,3 +82,14 @@ export function downloadUpdate() {
 export function installUpdate() {
   autoUpdater.quitAndInstall(false, true);
 }
+
+export async function manualCheckForUpdates(mainWindow) {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    // result.updateInfo exists if update found, but our guard handles downgrades internally.
+    return { success: true, info: result?.updateInfo };
+  } catch (err) {
+    logError('Updater', err);
+    return { success: false, error: err.message };
+  }
+}

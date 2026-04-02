@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
   restoreCustomFile: () => ipcRenderer.invoke('restore-custom-file'),
 
   // ─── NEW: Auto Updater ───
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_, data) => cb(data)),

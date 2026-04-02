@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Database, HardDrive, Clock, Wifi, WifiOff, Shield, Terminal, RefreshCw, Download, FolderOpen, Upload, Cloud, CloudOff, CheckCircle } from 'lucide-react';
+import { Activity, Database, HardDrive, Clock, Wifi, WifiOff, Shield, Terminal, RefreshCw, Download, FolderOpen, Upload, Cloud, CloudOff, CheckCircle, ArrowUpCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function SystemHealth() {
@@ -14,6 +14,7 @@ export default function SystemHealth() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -284,6 +285,47 @@ export default function SystemHealth() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Software Update Section */}
+      <div className={`${card} p-5`}>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <ArrowUpCircle className="w-5 h-5 text-indigo-500" />
+            <div>
+              <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Software Update</h3>
+              <p className={`text-[10px] ${dm ? 'text-slate-500' : 'text-slate-400'} uppercase font-bold tracking-wider`}>
+                Sports Zone Updater
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!window.api?.checkForUpdates) {
+                addToast('Updater unavailable in web mode.', 'error');
+                return;
+              }
+              setCheckingUpdate(true);
+              try {
+                const res = await window.api.checkForUpdates();
+                if (!res?.success) {
+                  addToast(`Update check failed: ${res?.error || 'Unknown error'}`, 'error');
+                } else {
+                  // If update found, our update-available IPC event triggers the popup automatically!
+                  addToast('Update check completed. It will notify you if an update is found!', 'success');
+                }
+              } catch (err) {
+                addToast('Update check failed.', 'error');
+              }
+              setCheckingUpdate(false);
+            }}
+            disabled={checkingUpdate}
+            className={`flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50`}
+          >
+            {checkingUpdate ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {checkingUpdate ? 'Checking...' : 'Check For Updates'}
+          </button>
+        </div>
       </div>
 
       {/* Error Logs */}
