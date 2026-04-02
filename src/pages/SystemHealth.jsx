@@ -309,16 +309,20 @@ export default function SystemHealth() {
               try {
                 const res = await window.api.checkForUpdates();
                 if (!res?.success) {
-                  addToast(`Update check failed: ${res?.error || 'Unknown error'}`, 'error');
+                  let errStr = res?.error || 'Unknown error';
+                  if (errStr.length > 100) errStr = errStr.substring(0, 100) + '... (Check Error Logs)';
+                  addToast(`Update check failed: ${errStr}`, 'error');
                 } else {
                   // If update found, our update-available IPC event triggers the popup automatically!
                   addToast('Update check completed. It will notify you if an update is found!', 'success');
                 }
               } catch (err) {
-                if (err.message?.includes('404')) {
+                let msg = err.message || 'Unknown error';
+                if (msg.includes('404')) {
                    addToast('Ensure your GitHub repository is public, or check your internet connection.', 'error');
                 } else {
-                   addToast('Update check failed. Check Logs.', 'error');
+                   if (msg.length > 100) msg = msg.substring(0, 100) + '... (Check Error Logs)';
+                   addToast('Update check failed: ' + msg, 'error');
                 }
               }
               setCheckingUpdate(false);
