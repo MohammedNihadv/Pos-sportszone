@@ -157,10 +157,10 @@ export default function SystemHealth() {
               <p className={`text-[10px] ${dm ? 'text-slate-500' : 'text-slate-400'} uppercase font-bold tracking-wider`}>Synced to Documents & AppData</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={() => window.api.openBackupFolder()}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 rounded-xl text-sm font-semibold transition-all"
+              className={`flex items-center gap-2 px-4 py-2 border-2 text-sm font-semibold rounded-xl transition-all ${dm ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
             >
               <FolderOpen className="w-4 h-4" /> Open Folder
             </button>
@@ -169,17 +169,17 @@ export default function SystemHealth() {
                 const res = await window.api.restoreCustomFile();
                 if (res?.success === false && !res?.canceled) addToast('Restore Failed: ' + (res.error || ''), 'error');
               }}
-              className="flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-400 dark:hover:bg-amber-900 rounded-xl text-sm font-semibold transition-all"
+              className={`flex items-center gap-2 px-4 py-2 border-2 text-sm font-semibold rounded-xl transition-all ${dm ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
             >
               <Upload className="w-4 h-4" /> Restore File
             </button>
             <button
               onClick={handleBackup}
               disabled={backingUp}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 disabled:opacity-50"
+              className={`flex items-center gap-2 px-4 py-2 bg-blue-600 border-2 border-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 hover:border-blue-700 transition-all shadow-md shadow-blue-500/20 disabled:opacity-50`}
             >
               {backingUp ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {backingUp ? 'Creating...' : 'Backup Now'}
+              {backingUp ? 'Creating Backup...' : 'Backup Now'}
             </button>
           </div>
         </div>
@@ -315,7 +315,11 @@ export default function SystemHealth() {
                   addToast('Update check completed. It will notify you if an update is found!', 'success');
                 }
               } catch (err) {
-                addToast('Update check failed.', 'error');
+                if (err.message?.includes('404')) {
+                   addToast('Ensure your GitHub repository is public, or check your internet connection.', 'error');
+                } else {
+                   addToast('Update check failed. Check Logs.', 'error');
+                }
               }
               setCheckingUpdate(false);
             }}

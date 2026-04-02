@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext';
 function SaleModal({ sale, onClose, onSave, dm }) {
   const isNew = !sale;
   const [form, setForm] = useState(sale || {
-    date: new Date().toISOString().split('T')[0], inv: '', description: '', cost: '', selling: ''
+    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'Cash'
   });
 
   const handleSave = () => {
@@ -45,6 +45,14 @@ function SaleModal({ sale, onClose, onSave, dm }) {
             <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>
             <div><label className={labelCls}>Selling Price (₹)</label><input type="number" className={inputCls} value={form.selling} onChange={e => setForm(p => ({...p, selling: e.target.value}))} /></div>
           </div>
+          <div>
+             <label className={labelCls}>Payment Method</label>
+             <select className={inputCls} value={form.payment_method || 'Cash'} onChange={e => setForm(p => ({...p, payment_method: e.target.value}))}>
+               <option>Cash</option>
+               <option>UPI</option>
+               <option>Card</option>
+             </select>
+          </div>
           {form.cost && form.selling && (
             <div className={`rounded-xl p-3 text-center ${profit >= 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-red-900/30' : 'bg-red-50')}`}>
               <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -72,15 +80,17 @@ export default function SalesLedger() {
   const allSales = useMemo(() => {
     const liveEntries = (liveSales || []).map(s => ({
       id: `live-${s.id}`,
-      date: (s.date || s.created_at || '').split('T')[0].split(' ')[0],
+      rawDate: new Date(s.date || s.created_at || new Date()),
+      date: new Date(s.date || s.created_at || new Date()).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       inv: `INV-${s.id}`,
       description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
       cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
       selling: s.total || 0,
+      payment_method: s.payment_method || 'Cash',
       items: (s.items || []).length,
       isLive: true,
     }));
-    return [...liveEntries, ...manualSales].sort((a,b) => new Date(b.date) - new Date(a.date));
+    return [...liveEntries, ...manualSales].sort((a,b) => b.rawDate - a.rawDate);
   }, [liveSales, manualSales]);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
@@ -181,6 +191,7 @@ export default function SalesLedger() {
               <th className={th}>Date</th>
               <th className={th}>Invoice</th>
               <th className={th}>Description</th>
+              <th className={th}>Payment</th>
               <th className={th + ' text-right'}>Cost (₹)</th>
               <th className={th + ' text-right'}>Selling (₹)</th>
               <th className={th + ' text-right'}>Profit (₹)</th>
@@ -198,6 +209,7 @@ export default function SalesLedger() {
                     <td className={`px-4 py-3.5 max-w-xs ${dm ? 'text-slate-200' : 'text-slate-700'}`}>
                       <span className="line-clamp-1 text-sm">{s.description}</span>
                     </td>
+                    <td className={`px-4 py-3.5 text-xs font-semibold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{s.payment_method}</td>
                     <td className={`px-4 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>₹{s.cost.toLocaleString()}</td>
                     <td className="px-4 py-3.5 text-right font-semibold text-blue-600">₹{s.selling.toLocaleString()}</td>
                     <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{profit.toLocaleString()}</td>
@@ -221,7 +233,7 @@ export default function SalesLedger() {
             {filtered.length > 0 && (
               <tfoot>
                 <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
-                  <td colSpan={3} className={`px-4 py-3 text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total ({filtered.length} entries)</td>
+                  <td colSpan={4} className={`px-4 py-3 text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total ({filtered.length} entries)</td>
                   <td className={`px-4 py-3 text-right text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>₹{totals.cost.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-sm text-blue-600">₹{totals.selling.toLocaleString()}</td>
                   <td className={`px-4 py-3 text-right text-sm ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{totals.profit.toLocaleString()}</td>

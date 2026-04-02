@@ -16,6 +16,8 @@ export default function Settings() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [tax, setTax] = useState({ cgst: localStorage.getItem('sz_cgst') || '9', sgst: localStorage.getItem('sz_sgst') || '9' });
+  const [autoSync, setAutoSync] = useState(localStorage.getItem('sz_autoSync') !== 'false');
   const dm = darkMode;
   
   useEffect(() => {
@@ -81,7 +83,12 @@ export default function Settings() {
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
-  const save = () => addToast('Settings saved successfully!', 'success');
+  const save = () => {
+    localStorage.setItem('sz_cgst', tax.cgst);
+    localStorage.setItem('sz_sgst', tax.sgst);
+    localStorage.setItem('sz_autoSync', autoSync);
+    addToast('Settings saved successfully!', 'success');
+  };
 
   const inputCls = `w-full px-3 py-2.5 rounded-lg text-sm border outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
@@ -152,8 +159,12 @@ export default function Settings() {
       <div className={`${card} p-5`}>
         <h3 className={`font-semibold mb-4 ${dm ? 'text-white' : 'text-slate-800'}`}>🧾 Tax Configuration</h3>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelCls}>CGST %</label><input type="number" className={inputCls} defaultValue="9" /></div>
-          <div><label className={labelCls}>SGST %</label><input type="number" className={inputCls} defaultValue="9" /></div>
+          <div><label className={labelCls}>CGST %</label>
+             <input type="number" className={inputCls} value={tax.cgst} onChange={(e) => setTax({...tax, cgst: e.target.value})} />
+          </div>
+          <div><label className={labelCls}>SGST %</label>
+             <input type="number" className={inputCls} value={tax.sgst} onChange={(e) => setTax({...tax, sgst: e.target.value})} />
+          </div>
         </div>
       </div>
 
@@ -354,16 +365,19 @@ export default function Settings() {
       </div>
 
       {/* Data Sync */}
-      <div className={`${card} p-5`}>
+      <div className={`${card} p-5 col-span-1 md:col-span-2`}>
         <h3 className={`font-semibold mb-4 flex items-center gap-2 ${dm ? 'text-white' : 'text-slate-800'}`}><RefreshCw className="w-4 h-4 text-blue-600" /> Sync & Backup</h3>
         <div className="flex items-center justify-between">
           <div>
             <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Sync</p>
             <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sync data to cloud when online</p>
           </div>
-          <div className="w-12 h-6 rounded-full bg-blue-600 relative">
-            <span className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-white shadow" />
-          </div>
+          <button 
+            onClick={() => setAutoSync(!autoSync)} 
+            className={`relative w-12 h-6 rounded-full transition-colors ${autoSync ? 'bg-blue-600' : 'bg-slate-300'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${autoSync ? 'translate-x-6' : ''}`} />
+          </button>
         </div>
       </div>
 
