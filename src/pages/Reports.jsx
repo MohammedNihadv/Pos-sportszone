@@ -13,6 +13,7 @@ export default function Reports() {
 
   const [monthlyData, setMonthlyData] = useState([]);
   const [topItems, setTopItems] = useState([]);
+  const [banking, setBanking] = useState({ cash: 0, upi: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function Reports() {
           months[key] = { month: d.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0, rawSales: [] };
         }
 
+        let totalCash = 0; let totalUpi = 0;
         s.forEach(sale => {
           const d = new Date(sale.date);
           const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
@@ -40,7 +42,12 @@ export default function Reports() {
             months[key].profit += (sale.total - cost);
             months[key].rawSales.push(sale);
           }
+          
+          if (sale.payment_method?.toLowerCase() === 'cash') totalCash += sale.total;
+          else if (sale.payment_method?.toLowerCase().includes('upi') || sale.payment_method?.toLowerCase().includes('bank')) totalUpi += sale.total;
         });
+        
+        setBanking({ cash: totalCash, upi: totalUpi });
 
         p.forEach(purchase => {
           const d = new Date(purchase.date);
@@ -117,6 +124,25 @@ export default function Reports() {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* Treasury & Banking Cards */}
+      <div className={`mt-6 mb-2 flex items-center justify-between`}>
+        <h3 className={`font-bold text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>Treasury & Bank Flow</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className={`${card} p-5 border-l-4 border-l-emerald-500`}>
+           <p className={`text-xs font-semibold ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Cash Collected (Gross)</p>
+           <p className="text-2xl font-bold text-emerald-600 mt-1">₹{banking.cash.toLocaleString()}</p>
+        </div>
+        <div className={`${card} p-5 border-l-4 border-l-blue-500`}>
+           <p className={`text-xs font-semibold ${dm ? 'text-slate-400' : 'text-slate-500'}`}>UPI / Bank Balance</p>
+           <p className="text-2xl font-bold text-blue-600 mt-1">₹{banking.upi.toLocaleString()}</p>
+        </div>
+        <div className={`${card} p-5 border-l-4 border-l-purple-500`}>
+           <p className={`text-xs font-semibold ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Tracked Revenue</p>
+           <p className="text-2xl font-bold text-purple-600 mt-1">₹{(banking.cash + banking.upi).toLocaleString()}</p>
+        </div>
       </div>
 
       {/* Trend Chart */}

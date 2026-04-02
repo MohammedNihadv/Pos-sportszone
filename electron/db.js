@@ -60,6 +60,10 @@ export function initDb() {
     )
   `).run();
 
+  // Migration: Add tender and change tracking
+  try { db.prepare("ALTER TABLE sales ADD COLUMN amount_paid REAL DEFAULT 0").run(); } catch(e){}
+  try { db.prepare("ALTER TABLE sales ADD COLUMN change_amount REAL DEFAULT 0").run(); } catch(e){}
+
   // Expenses table
   db.prepare(`
     CREATE TABLE IF NOT EXISTS expenses (

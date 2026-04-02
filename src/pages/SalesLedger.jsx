@@ -6,8 +6,16 @@ import { useApp } from '../context/AppContext';
 function SaleModal({ sale, onClose, onSave, dm }) {
   const isNew = !sale;
   const [form, setForm] = useState(sale || {
-    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'Cash'
+    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'Cash', amountPaid: '', changeAmount: ''
   });
+
+  // Auto-calculate change
+  const calcChange = (received, total) => {
+    const r = parseFloat(received);
+    const t = parseFloat(total);
+    if (!isNaN(r) && !isNaN(t) && r >= t) return (r - t).toFixed(2);
+    return '0.00';
+  };
 
   const handleSave = () => {
     if (!form.description || !form.cost || !form.selling) return;
@@ -16,6 +24,8 @@ function SaleModal({ sale, onClose, onSave, dm }) {
       id: sale?.id || Date.now(),
       cost: parseFloat(form.cost),
       selling: parseFloat(form.selling),
+      amountPaid: parseFloat(form.amountPaid) || parseFloat(form.selling),
+      changeAmount: parseFloat(form.changeAmount) || 0,
       items: form.description.split(',').length,
     });
     onClose();
@@ -51,7 +61,21 @@ function SaleModal({ sale, onClose, onSave, dm }) {
                <option>Cash</option>
                <option>UPI</option>
                <option>Card</option>
+               <option>split</option>
              </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border-2 border-dashed bg-blue-50/50 dark:bg-blue-900/10 dark:border-slate-700">
+            <div>
+              <label className={labelCls}>Amount Received</label>
+              <input type="number" placeholder={form.selling || '0'} className={inputCls} value={form.amountPaid} onChange={e => {
+                const received = e.target.value;
+                setForm(p => ({...p, amountPaid: received, changeAmount: calcChange(received, p.selling) }));
+              }} />
+            </div>
+            <div>
+              <label className={labelCls}>Change Returned</label>
+              <input type="number" readOnly className={`${inputCls} opacity-80 cursor-not-allowed`} value={form.changeAmount || '0.00'} />
+            </div>
           </div>
           {form.cost && form.selling && (
             <div className={`rounded-xl p-3 text-center ${profit >= 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-red-900/30' : 'bg-red-50')}`}>
@@ -87,6 +111,8 @@ export default function SalesLedger() {
       cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
       selling: s.total || 0,
       payment_method: s.payment_method || 'Cash',
+      amountPaid: s.amountPaid || s.total || 0,
+      changeAmount: s.changeAmount || 0,
       items: (s.items || []).length,
       isLive: true,
     }));
@@ -107,11 +133,34 @@ export default function SalesLedger() {
     profit: acc.profit + (s.selling - s.cost),
   }), { cost: 0, selling: 0, profit: 0 }), [filtered]);
 
-  const handleSave = (entry) => {
+  const handleSave = async (entry) => {
+    if (entry.isLive) {
+      const realId = parseInt(String(entry.id).replace('live-', ''), 10);
+      const orig = liveSales.find(s => s.id === realId);
+      if (orig) {
+        const updated = {
+           ...orig,
+           total: entry.selling,
+           paymentMethod: entry.payment_method,
+           amountPaid: entry.amountPaid,
+           changeAmount: entry.changeAmount
+        };
+        if (window.api) {
+           await window.api.saveSale(updated);
+           const fresh = await window.api.getSales();
+           setLiveSales(fresh);
+           addToast(`Live Sale ${entry.inv} perfectly updated in Database!`, 'success');
+        } else {
+           setLiveSales(prev => prev.map(s => s.id === realId ? updated : s));
+        }
+      }
+      return;
+    }
+
     const exists = manualSales.find(s => s.id === entry.id);
     if (exists) {
       setManualSales(prev => prev.map(s => s.id === entry.id ? entry : s));
-      addToast(`Sale ${entry.inv || '#'} updated`, 'success');
+      addToast(`Manual Sale ${entry.inv || '#'} updated`, 'success');
     } else {
       setManualSales(prev => [{ ...entry, isManual: true }, ...prev]);
       addToast(`Sale ${entry.inv || '#'} added — Profit ₹${(entry.selling - entry.cost).toFixed(0)}`, 'success');
@@ -204,7 +253,10 @@ export default function SalesLedger() {
                 const pct = ((profit / s.cost) * 100).toFixed(1);
                 return (
                   <tr key={s.id} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
-                    <td className={`px-4 py-3.5 text-xs font-mono ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.date}</td>
+                    <td className={`px-4 py-3.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <div className={`font-bold text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>{s.rawDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                      <div className="text-[11px] mt-0.5">{s.rawDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </td>
                     <td className="px-4 py-3.5 font-semibold text-blue-600 text-xs">{s.inv || '—'}</td>
                     <td className={`px-4 py-3.5 max-w-xs ${dm ? 'text-slate-200' : 'text-slate-700'}`}>
                       <span className="line-clamp-1 text-sm">{s.description}</span>

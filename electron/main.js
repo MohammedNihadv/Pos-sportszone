@@ -236,23 +236,32 @@ safeHandle('delete-expense-category', (_, id) => {
 
 // ─── IPC: Sales ───
 safeHandle('save-sale', (_, sale) => {
-  const info = getDb().prepare('INSERT INTO sales (total, discount, payment_method, items) VALUES (?, ?, ?, ?)')
-    .run(sale.total, sale.discount, sale.paymentMethod, JSON.stringify(sale.items));
+  if (sale.id) {
+    getDb().prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=? WHERE id=?')
+      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.id);
+    logAudit('Updated Sale', `Sale ID ${sale.id} updated (Method: ${sale.paymentMethod})`);
+    return { id: sale.id };
+  } else {
+    const info = getDb().prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items));
 
-  const updateStock = getDb().prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
-  sale.items.forEach(item => {
-    updateStock.run(item.qty, item.id);
-  });
-  
-  // Note: we don't log every single sale to audit_logs to prevent spam, 
-  // only modifications/deletions or big discounts could be logged if needed.
-
-  return { id: info.lastInsertRowid };
+    const updateStock = getDb().prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+    sale.items.forEach(item => {
+      updateStock.run(item.qty, item.id);
+    });
+    return { id: info.lastInsertRowid };
+  }
 });
 
 safeHandle('get-sales', () => {
   const sales = getDb().prepare('SELECT * FROM sales ORDER BY date DESC').all();
-  return sales.map(s => ({ ...s, items: JSON.parse(s.items) }));
+  return sales.map(s => ({ 
+    ...s, 
+    items: JSON.parse(s.items),
+    amountPaid: s.amount_paid,
+    changeAmount: s.change_amount,
+    paymentMethod: s.payment_method
+  }));
 });
 
 safeHandle('delete-sale', (_, id) => {
