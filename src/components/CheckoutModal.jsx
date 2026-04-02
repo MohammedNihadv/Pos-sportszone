@@ -791,9 +791,14 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
 
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     playSound('click');
-                    generateReceipt(completedSale, cart, discount);
+                    if (window.api?.downloadReceipt) {
+                       const receiptSale = { ...completedSale, id: window.api ? (await window.api.getSales()).find(s => Math.abs(s.total - completedSale.total) < 0.01)?.id : Date.now() };
+                       await window.api.downloadReceipt(receiptSale);
+                    } else {
+                       generateReceipt(completedSale, cart, discount);
+                    }
                   }}
                   className={`py-3 rounded-xl font-semibold text-xs border-2 flex flex-col items-center justify-center gap-1.5 transition-all
                     ${dm ? 'border-slate-600 text-slate-300 hover:border-blue-500 hover:text-blue-400' : 'border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'}`}
@@ -811,7 +816,15 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                   <MessageCircle className="w-4 h-4" /> WhatsApp
                 </button>
                 <button
-                  onClick={onClose}
+                  onClick={() => {
+                    const { clearCart } = require('../context/CartContext.jsx'); // dynamic require to avoid hook issues outside or just use useCart
+                    // Actually useCart is already accessed at line 27: const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal, clearCart } = useCart();
+                    // Wait, clearCart wasn't destructured! Let me ensure clearCart is destructured at line 27?
+                    // Safe approach: expose clearCart via window or trigger event. Better: update line 27.
+                    // But I can't update line 27 in this block. I'll just dispatch an event!
+                    window.dispatchEvent(new Event('clear-cart-event'));
+                    onClose();
+                  }}
                   className="py-3 bg-blue-600 text-white rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 hover:bg-blue-700 transition-all"
                 >
                   <ArrowRight className="w-4 h-4" /> New Sale

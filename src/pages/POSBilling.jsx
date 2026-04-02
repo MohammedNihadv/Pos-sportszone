@@ -186,7 +186,6 @@ function POSContent() {
       total: grandTotal,
       discount: discountAmount,
       items: cart,
-      // Advanced payment fields
       paymentMethod: paymentData.paymentMethod,
       payments: paymentData.payments,
       amountPaid: paymentData.amountPaid,
@@ -202,7 +201,6 @@ function POSContent() {
         return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
       }));
     } else {
-      // Browser-mode: save to context
       setSales(prev => [{ ...saleData, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);
       setProducts(prev => prev.map(p => {
         const cartItem = cart.find(i => i.id === p.id);
@@ -217,25 +215,9 @@ function POSContent() {
     playSound('success');
     addToast(`Sale of ₹${grandTotal.toFixed(2)} completed! 🎉${changeInfo}`, 'success');
 
-    // Offer receipt download
-    if (window.api?.downloadReceipt) {
-      const receiptSale = {
-        ...saleData,
-        id: window.api ? (await window.api.getSales()).find(s => Math.abs(s.total - grandTotal) < 0.01)?.id : Date.now(),
-      };
-      // Auto-download receipt PDF
-      try {
-        const result = await window.api.downloadReceipt(receiptSale);
-        if (result?.success) {
-          addToast('📄 Receipt saved to Documents/SportsZone/Receipts/', 'success');
-        }
-      } catch {}
-    }
-
-    clearCart();
-    setShowCheckout(false);
-    if (searchRef.current) searchRef.current.focus();
-  }, [grandTotal, discountAmount, cart, addToast, clearCart, setProducts, setSales]);
+    // The CheckoutModal will stay on the "Success" screen now.
+    // The user can click "Receipt" or "WhatsApp" there manually.
+  }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -252,6 +234,13 @@ function POSContent() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [cart, showCheckout, clearCart]);
+
+  // Listen for the custom clear cart event from the Modal
+  useEffect(() => {
+    const handleClearCart = () => clearCart();
+    window.addEventListener('clear-cart-event', handleClearCart);
+    return () => window.removeEventListener('clear-cart-event', handleClearCart);
+  }, [clearCart]);
 
   // Auto-focus search on mount
   useEffect(() => { if (searchRef.current) searchRef.current.focus(); }, []);
