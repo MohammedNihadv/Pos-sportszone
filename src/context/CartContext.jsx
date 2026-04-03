@@ -4,13 +4,15 @@ import { saveSession, recoverSession, clearSession } from '../utils/sessionRecov
 
 const CartContext = createContext(null);
 
-const TAX_RATE = 0.09; // 9% each for CGST & SGST
-
 export function CartProvider({ children }) {
-  const { addToast } = useApp();
+  const { addToast, appSettings } = useApp();
   const [cart, setCart] = useState([]);
   const [discount, setDiscount] = useState(0);
   const [recoveryOffered, setRecoveryOffered] = useState(false);
+
+  // Dynamic tax from global settings
+  const cgstRate = (parseFloat(appSettings?.cgstRate) || 0) / 100;
+  const sgstRate = (parseFloat(appSettings?.sgstRate) || 0) / 100;
 
   // Check for crash recovery on mount
   useEffect(() => {
@@ -21,7 +23,7 @@ export function CartProvider({ children }) {
       addToast(`Recovered ${recoveredCart.length} item(s) from previous session`, 'success');
     }
     setRecoveryOffered(true);
-  }, []);
+  }, [recoveryOffered, addToast]);
 
   // Persist cart on every change
   useEffect(() => {
@@ -66,9 +68,10 @@ export function CartProvider({ children }) {
   
   // Tax-Inclusive Logic
   const grandTotal = subtotal - discountAmount;
-  const taxableAmount = grandTotal / (1 + (TAX_RATE * 2));
-  const cgst = (grandTotal - taxableAmount) / 2;
-  const sgst = cgst;
+  const totalTaxRate = cgstRate + sgstRate;
+  const taxableAmount = totalTaxRate > 0 ? grandTotal / (1 + totalTaxRate) : grandTotal;
+  const cgst = totalTaxRate > 0 ? (grandTotal - taxableAmount) * (cgstRate / totalTaxRate) : 0;
+  const sgst = totalTaxRate > 0 ? (grandTotal - taxableAmount) * (sgstRate / totalTaxRate) : 0;
 
   return (
     <CartContext.Provider value={{

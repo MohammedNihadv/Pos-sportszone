@@ -195,14 +195,39 @@ safeHandle('check-for-updates', async () => {
   return await manualCheckForUpdates(mainWindow);
 });
 
-// ─── IPC: Authentication & Audit Logs ───
+safeHandle('get-settings', () => {
+  const rows = getDb().prepare('SELECT * FROM settings').all();
+  const settings = {};
+  rows.forEach(r => {
+    try {
+      settings[r.key] = JSON.parse(r.value);
+    } catch {
+      settings[r.key] = r.value;
+    }
+  });
+  return settings;
+});
+
+safeHandle('save-settings', (_, data) => {
+  const transaction = getDb().transaction((settings) => {
+    const upsert = getDb().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    for (const [key, val] of Object.entries(settings)) {
+      upsert.run(key, typeof val === 'object' ? JSON.stringify(val) : val.toString());
+    }
+  });
+  transaction(data);
+  return true;
+});
+
 safeHandle('verify-pin', (_, submittedPin) => {
   const row = getDb().prepare("SELECT value FROM settings WHERE key = 'owner_pin'").get();
-  return row && row.value === submittedPin;
+  // Migration fallback: default pin 1111 if not set in DB yet but exists in AppContext
+  const ownerPin = row ? row.value : '1111';
+  return ownerPin === submittedPin;
 });
 
 safeHandle('update-pin', (_, newPin) => {
-  getDb().prepare("UPDATE settings SET value = ? WHERE key = 'owner_pin'").run(newPin);
+  getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('owner_pin', newPin);
   getDb().prepare("INSERT INTO audit_logs (action, details) VALUES (?, ?)").run('Changed Settings', 'Owner PIN updated');
   return true;
 });
@@ -412,6 +437,11 @@ safeHandle('get-last-sync-time', () => {
 
 // ─── IPC: Receipt Download ───
 safeHandle('download-receipt', async (_, sale) => {
-  return await downloadReceiptPDF(mainWindow, sale);
+  const rows = getDb().prepare('SELECT * FROM settings').all();
+  const settings = {};
+  rows.forEach(r => {
+    try { settings[r.key] = JSON.parse(r.value); } catch { settings[r.key] = r.value; }
+  });
+  return await downloadReceiptPDF(mainWindow, sale, settings);
 });
 

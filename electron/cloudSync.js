@@ -208,7 +208,16 @@ export async function pullFromCloud(db) {
 export function startAutoSync(db) {
   // Sync every 5 minutes (reduced from 30m for higher data safety)
   setInterval(() => {
-    runFullSync(db).catch(err => logError('AutoSync', err));
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'autoSync'").get();
+      const enabled = row ? (row.value === 'true' || row.value === '1') : true; // Default to true
+      
+      if (enabled) {
+        runFullSync(db).catch(err => logError('AutoSync', err));
+      }
+    } catch (e) {
+      logError('AutoSyncToggleCheck', e);
+    }
   }, 5 * 60 * 1000);
 }
 

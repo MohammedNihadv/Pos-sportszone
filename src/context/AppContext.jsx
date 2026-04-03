@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo } 
 
 const AppContext = createContext(null);
 
-// ─── Default fallback data (used when Electron's window.api is unavailable) ───
+// ─── Default fallback data ───
 const DEFAULT_CATEGORIES = [
   { id: 1, name: 'Jerseys' }, { id: 2, name: 'Boots & Shoes' },
   { id: 3, name: 'Shorts & Tracks' }, { id: 4, name: 'Caps' },
@@ -58,6 +58,23 @@ export function AppProvider({ children }) {
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [appSettings, setAppSettingsState] = useState({
+    businessName: 'Sports Zone',
+    businessGstin: '',
+    businessPhone: '',
+    businessEmail: '',
+    businessAddress: '',
+    cgstRate: 9,
+    sgstRate: 9,
+    printerType: 'Thermal (80mm)',
+    printerCopies: 1,
+    autoSync: true,
+    darkMode: false,
+    soundEnabled: true,
+    autoLockEnabled: true,
+    autoLockTimeout: 2
+  });
+
   const [credits, setCredits] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sz_credits') || '[]'); } catch { return []; }
   });
@@ -75,17 +92,35 @@ export function AppProvider({ children }) {
 
   const api = typeof window !== 'undefined' ? window.api : null;
 
-  // Fetch initial data — with complete fallbacks
+  // ─── Toggles & Preferences (Reactive States) ───
+  const [autoLockEnabled, setAutoLockEnabledState] = useState(appSettings.autoLockEnabled);
+  const [autoLockTimeout, setAutoLockTimeoutState] = useState(appSettings.autoLockTimeout);
+  const [soundEnabled, setSoundEnabledState] = useState(appSettings.soundEnabled);
+
+  // Sync reactive states when appSettings loads or changes
+  useEffect(() => {
+    setDarkMode(appSettings.darkMode);
+    setAutoLockEnabledState(appSettings.autoLockEnabled);
+    setAutoLockTimeoutState(appSettings.autoLockTimeout);
+    setSoundEnabledState(appSettings.soundEnabled);
+  }, [appSettings]);
+
+  // Fetch initial data
   const loadData = useCallback(async () => {
     if (api) {
       try {
-        const [prod, supp, cats, expCats, sl, ex, pu] = await Promise.all([
+        const [prod, supp, cats, expCats, sl, ex, pu, settings] = await Promise.all([
           api.getProducts(), api.getSuppliers(), api.getCategories(),
-          api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases()
+          api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases(),
+          api.getSettings()
         ]);
         setProducts(prod || []); setSuppliers(supp || []);
         setCategories(cats || []); setExpenseCategories(expCats || []);
         setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
+        
+        if (settings && Object.keys(settings).length > 0) {
+          setAppSettingsState(prev => ({ ...prev, ...settings }));
+        }
       } catch (err) {
         console.warn('API load failed, using fallback data:', err);
         setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
@@ -98,6 +133,18 @@ export function AppProvider({ children }) {
       setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
     }
   }, [api]);
+
+  const saveAppSettings = useCallback(async (newSettings) => {
+    const updated = { ...appSettings, ...newSettings };
+    setAppSettingsState(updated);
+    if (api) {
+      await api.saveSettings(newSettings);
+    }
+    // Also sync localStorage for legacy hooks/utils
+    Object.entries(newSettings).forEach(([k, v]) => {
+      localStorage.setItem(`sz_${k}`, typeof v === 'object' ? JSON.stringify(v) : v);
+    });
+  }, [api, appSettings]);
 
   useEffect(() => {
     loadData();
@@ -117,29 +164,9 @@ export function AppProvider({ children }) {
     }
   }, [api]);
 
-  // ─── Online/Offline Detection ───
-  useEffect(() => {
-    const goOnline = () => {
-      setSyncStatus('syncing');
-      setTimeout(() => setSyncStatus('synced'), 2000);
-    };
-    const goOffline = () => setSyncStatus('offline');
-    
-    // Initial state
-    if (!navigator.onLine) setSyncStatus('offline');
-    
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-
-  // Customization & Security
+  // Security
   const [logo, setLogoState] = useState(() => {
     const stored = localStorage.getItem('sz_logo');
-    // If stored logo is a large data URL (likely old corrupted cache), reset to file
     if (stored && stored.startsWith('data:') && stored.length > 50000) {
       localStorage.removeItem('sz_logo');
       return './logo.png';
@@ -162,19 +189,9 @@ export function AppProvider({ children }) {
     ];
     try {
       const stored = JSON.parse(localStorage.getItem('sz_users'));
-      if (stored) {
-        // Migration: add Owner user if missing from old data
-        if (!stored.find(u => u.role === 'Owner')) {
-          const updated = [...stored, { role: 'Owner', name: 'Owner', pin: '1111' }];
-          localStorage.setItem('sz_users', JSON.stringify(updated));
-          return updated;
-        }
-        return stored;
-      }
+      if (stored) return stored;
       return defaults;
-    } catch {
-      return defaults;
-    }
+    } catch { return defaults; }
   });
 
   const [currentUser, setCurrentUserState] = useState(() => {
@@ -183,19 +200,12 @@ export function AppProvider({ children }) {
   });
 
   const [isLocked, setIsLocked] = useState(false);
-  const [autoLockEnabled, setAutoLockEnabledState] = useState(() => localStorage.getItem('sz_autolock_enabled') !== 'false');
-  const [autoLockTimeout, setAutoLockTimeoutState] = useState(() => parseInt(localStorage.getItem('sz_autolock_timeout') || '2', 10));
 
   const setCurrentUser = useCallback((user) => {
     setCurrentUserState(user);
     if (user) {
       localStorage.setItem('sz_current_user', JSON.stringify(user));
-      // Auto-unlock admin for Owner and Admin roles
-      if (user.role === 'Owner' || user.role === 'Admin') {
-        setIsAdminUnlocked(true);
-      } else {
-        setIsAdminUnlocked(false);
-      }
+      setIsAdminUnlocked(user.role === 'Owner' || user.role === 'Admin');
     } else {
       localStorage.removeItem('sz_current_user');
       setIsAdminUnlocked(false);
@@ -206,7 +216,6 @@ export function AppProvider({ children }) {
   const updateAdminPin = useCallback((newPin) => { 
     setAdminPinState(newPin); 
     localStorage.setItem('sz_admin_pin', newPin);
-    // Also update Admin user pin directly
     setUsers(prev => {
       const nu = prev.map(u => u.role === 'Admin' ? { ...u, pin: newPin } : u);
       localStorage.setItem('sz_users', JSON.stringify(nu));
@@ -215,18 +224,15 @@ export function AppProvider({ children }) {
   }, []);
   const lockAdmin = useCallback(() => setIsAdminUnlocked(false), []);
 
-  const [soundEnabled, setSoundEnabledState] = useState(() => localStorage.getItem('sz_sound_enabled') !== 'false');
-  const setSoundEnabled = useCallback((v) => { setSoundEnabledState(v); localStorage.setItem('sz_sound_enabled', v); }, []);
-
-  const setAutoLockEnabled = useCallback((v) => { setAutoLockEnabledState(v); localStorage.setItem('sz_autolock_enabled', v); }, []);
-  const setAutoLockTimeout = useCallback((v) => { setAutoLockTimeoutState(v); localStorage.setItem('sz_autolock_timeout', v); }, []);
+  // Toggles setters (now just save to global settings)
+  const setSoundEnabled = useCallback((v) => saveAppSettings({ soundEnabled: v }), [saveAppSettings]);
+  const setAutoLockEnabled = useCallback((v) => saveAppSettings({ autoLockEnabled: v }), [saveAppSettings]);
+  const setAutoLockTimeout = useCallback((v) => saveAppSettings({ autoLockTimeout: v }), [saveAppSettings]);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => {
-      // Deduplicate: skip if same message exists within recent toasts
       if (prev.some(t => t.message === message)) return prev;
-      // Limit to max 3 visible toasts — remove oldest if exceeded
       const updated = [...prev, { id, message, type }];
       return updated.length > 3 ? updated.slice(-3) : updated;
     });
@@ -235,7 +241,7 @@ export function AppProvider({ children }) {
   const dismissToast = useCallback((id) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 
   const contextValue = useMemo(() => ({
-    darkMode, setDarkMode, sidebarCollapsed, setSidebarCollapsed,
+    darkMode, setDarkMode: (v) => saveAppSettings({ darkMode: v }), sidebarCollapsed, setSidebarCollapsed,
     toasts, addToast, dismissToast, syncStatus, setSyncStatus,
     logo, setLogo, isAdminUnlocked, setIsAdminUnlocked, lockAdmin,
     adminPin, updateAdminPin,
@@ -246,6 +252,7 @@ export function AppProvider({ children }) {
     categories, setCategories, expenseCategories, setExpenseCategories,
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits, customers, setCustomers,
+    appSettings, saveAppSettings,
     refreshProducts, refreshSales, loadData
   }), [
     darkMode, sidebarCollapsed, toasts, syncStatus, logo,
@@ -253,6 +260,7 @@ export function AppProvider({ children }) {
     soundEnabled, autoLockEnabled, autoLockTimeout,
     products, suppliers, categories, expenseCategories,
     sales, expenses, purchases, credits, customers,
+    appSettings, saveAppSettings,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
     refreshProducts, refreshSales, loadData

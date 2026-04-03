@@ -14,10 +14,21 @@ function getReceiptDir() {
   return dir;
 }
 
-export function generateReceiptHTML(sale) {
+export function generateReceiptHTML(sale, settings = {}) {
   const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : sale.items;
   const date = sale.date ? new Date(sale.date).toLocaleString('en-IN') : new Date().toLocaleString('en-IN');
   const saleId = sale.id || Date.now();
+
+  const businessName = settings.businessName || 'SPORTS ZONE';
+  const businessAddress = settings.businessAddress || 'Sports Goods & Accessories';
+  const businessGstin = settings.businessGstin || '';
+  const businessPhone = settings.businessPhone || '';
+  
+  const cgstRateRaw = parseFloat(settings.cgstRate) || 0;
+  const sgstRateRaw = parseFloat(settings.sgstRate) || 0;
+  
+  const cgstRate = cgstRateRaw / 100;
+  const sgstRate = sgstRateRaw / 100;
 
   const itemRows = items.map(item => `
     <tr>
@@ -31,8 +42,12 @@ export function generateReceiptHTML(sale) {
   const subtotal = items.reduce((sum, i) => sum + (i.qty * i.price), 0);
   const discount = sale.discount || 0;
   const afterDiscount = subtotal - discount;
-  const cgst = afterDiscount * 0.09;
-  const sgst = afterDiscount * 0.09;
+  
+  // Dynamic Tax Calculation for Receipt
+  const totalTaxRate = cgstRate + sgstRate;
+  const taxableAmount = totalTaxRate > 0 ? afterDiscount / (1 + totalTaxRate) : afterDiscount;
+  const cgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (cgstRate / totalTaxRate) : 0;
+  const sgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (sgstRate / totalTaxRate) : 0;
 
   return `<!DOCTYPE html>
 <html>
@@ -42,8 +57,9 @@ export function generateReceiptHTML(sale) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 24px; color: #1e293b; background: #fff; }
     .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 16px; }
-    .header h1 { font-size: 22px; font-weight: 800; color: #1e40af; letter-spacing: 1px; }
+    .header h1 { font-size: 22px; font-weight: 800; color: #1e40af; text-transform: uppercase; }
     .header p { font-size: 11px; color: #64748b; margin-top: 4px; }
+    .header .gstin { font-weight: bold; color: #2563eb; margin-top: 2px; }
     .meta { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; color: #475569; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     th { padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -61,8 +77,10 @@ export function generateReceiptHTML(sale) {
 </head>
 <body>
   <div class="header">
-    <h1>⚽ SPORTS ZONE</h1>
-    <p>Sports Goods & Accessories</p>
+    <h1>${businessName}</h1>
+    <p>${businessAddress}</p>
+    ${businessGstin ? `<p class="gstin">GSTIN: ${businessGstin}</p>` : ''}
+    ${businessPhone ? `<p>PH: ${businessPhone}</p>` : ''}
   </div>
 
   <div class="meta">
@@ -90,27 +108,26 @@ export function generateReceiptHTML(sale) {
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>₹${subtotal.toFixed(2)}</span></div>
     ${discount > 0 ? `<div class="row" style="color:#ef4444;"><span>Discount</span><span>-₹${discount.toFixed(2)}</span></div>` : ''}
-    <div class="row"><span>CGST (9%)</span><span>₹${cgst.toFixed(2)}</span></div>
-    <div class="row"><span>SGST (9%)</span><span>₹${sgst.toFixed(2)}</span></div>
-    <div class="row grand"><span>Grand Total</span><span>₹${sale.total?.toFixed(2) || afterDiscount + cgst + sgst}</span></div>
+    ${cgstRateRaw > 0 ? `<div class="row"><span>CGST (${cgstRateRaw}%)</span><span>₹${cgst.toFixed(2)}</span></div>` : ''}
+    ${sgstRateRaw > 0 ? `<div class="row"><span>SGST (${sgstRateRaw}%)</span><span>₹${sgst.toFixed(2)}</span></div>` : ''}
+    <div class="row grand"><span>Grand Total</span><span>₹${Number(sale.total || afterDiscount).toFixed(2)}</span></div>
   </div>
 
   <div class="footer">
-    <p class="thanks">Thank you for shopping at Sports Zone!</p>
+    <p class="thanks">Thank you for shopping at ${businessName}!</p>
     <p>Visit us again • Exchange within 7 days with receipt</p>
   </div>
 </body>
 </html>`;
 }
 
-export async function downloadReceiptPDF(mainWindow, sale) {
+export async function downloadReceiptPDF(mainWindow, sale, settings = {}) {
   try {
-    const html = generateReceiptHTML(sale);
+    const html = generateReceiptHTML(sale, settings);
     const saleId = sale.id || Date.now();
     const fileName = `receipt_${saleId}_${Date.now()}.pdf`;
     const filePath = path.join(getReceiptDir(), fileName);
 
-    // Load HTML into a hidden BrowserWindow to render it
     const { BrowserWindow } = await import('electron');
     const receiptWin = new BrowserWindow({
       width: 400,
@@ -120,12 +137,10 @@ export async function downloadReceiptPDF(mainWindow, sale) {
     });
 
     await receiptWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-
-    // Wait a short moment for rendering
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const pdfBuffer = await receiptWin.webContents.printToPDF({
-      pageSize: { width: 80000, height: 200000 }, // ~80mm thermal receipt width, tall
+      pageSize: { width: 80000, height: 200000 },
       printBackground: true,
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
     });
