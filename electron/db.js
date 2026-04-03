@@ -185,6 +185,38 @@ export default function getDb() {
   return db;
 }
 
+export function checkDatabaseIntegrity() {
+  const currentDb = getDb();
+  try {
+    const result = currentDb.prepare('PRAGMA integrity_check').get();
+    if (result.integrity_check !== 'ok') {
+      return { success: false, error: result.integrity_check };
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function repairDatabase() {
+  const currentDb = getDb();
+  try {
+    // Stage 1: Non-destructive repair attempts
+    currentDb.pragma('wal_checkpoint(TRUNCATE)');
+    currentDb.prepare('REINDEX').run();
+    currentDb.prepare('VACUUM').run();
+    
+    // Check again
+    const check = checkDatabaseIntegrity();
+    if (!check.success) {
+      throw new Error(`Auto-repair failed: ${check.error}`);
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 export function closeDb() {
   if (db) {
     db.close();

@@ -3,7 +3,7 @@ import path from 'path';
 import { app, dialog, shell } from 'electron';
 import isDev from 'electron-is-dev';
 import { logInfo, logError } from './logger.js';
-import { closeDb } from './db.js';
+import getDb, { closeDb } from './db.js';
 
 function getBackupDirs() {
   if (isDev) {
@@ -43,6 +43,9 @@ export function createBackup() {
     if (!fs.existsSync(dbPath)) {
       throw new Error("Active database not found.");
     }
+
+    // Force flush WAL to main DB to ensure a non-corrupt SQLite file copy
+    try { getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { logError('Backup Checkpoint', e); }
 
     const successfulPaths = [];
 
@@ -128,6 +131,9 @@ export function restoreBackup(backupPath) {
     }
     
     ensureBackupDirs();
+
+    // Force flush WAL before taking the safety backup
+    try { getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { logError('Restore Checkpoint', e); }
 
     // Create a safety backup of CURRENT state before overwriting
     const safetyName = `shop-pre-restore-safety-${Date.now()}.db`;

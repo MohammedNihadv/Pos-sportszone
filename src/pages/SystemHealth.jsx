@@ -15,6 +15,8 @@ export default function SystemHealth() {
   const [lastSync, setLastSync] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [dbHealth, setDbHealth] = useState({ success: true });
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -40,10 +42,14 @@ export default function SystemHealth() {
         setHealth(h);
         setLogs(l || []);
         setBackups(b || []);
-        // Load last sync time
+        // Load last sync and health
         try {
-          const ls = await window.api.getLastSyncTime();
+          const [ls, health] = await Promise.all([
+            window.api.getLastSyncTime(),
+            window.api.getDbHealth()
+          ]);
           setLastSync(ls);
+          setDbHealth(health);
         } catch {}
       } else {
         setHealth({
@@ -80,13 +86,47 @@ export default function SystemHealth() {
   }
 
   async function handleRestore(backupPath, name) {
-    if (!window.confirm(`Restore from "${name}"?\n\nThe app will restart after restoring. A safety backup will be created automatically.`)) return;
+    if (!window.confirm(`⚠️ WARNING: Restore from "${name}"?\n\nThis will OVERWRITE your current database with data from this backup. If you made sales TODAY, please ensure you "Sync Now" to the Cloud first to avoid losing them!\n\nThe app will restart after restoring.`)) return;
     try {
       const result = await window.api.restoreBackup(backupPath);
       if (!result.success) {
         addToast('Restore failed: ' + result.error, 'error');
       }
     } catch {}
+  }
+
+  async function handleRepair() {
+    if (!window.confirm("Attempt to repair database? This will run an integrity check and internal optimization (VACUUM/REINDEX).")) return;
+    try {
+      const res = await window.api.repairDb();
+      if (res.success) {
+        addToast("Database repair complete!", "success");
+        setDbHealth({ success: true });
+      } else {
+        addToast("Repair failed: " + res.error, "error");
+      }
+    } catch (e) {
+      addToast("Repair error", "error");
+    }
+  }
+
+  async function handleCloudRecover() {
+    if (!isOnline) { addToast('Offline. Connect to internet to recover.', 'error'); return; }
+    if (!window.confirm("⚠️ DISASTER RECOVERY: Download data from Cloud?\n\nThis will download missing products, sales, and suppliers from Supabase and merge them into your local records. Use this if you just switched computers or restored an old backup.")) return;
+    
+    setRecovering(true);
+    try {
+      const res = await window.api.pullFromCloud();
+      if (res.success) {
+        addToast(`Recovery complete! Pulled: ${Object.entries(res.pulled).map(([k, v]) => `${v} ${k}`).join(', ')}`, 'success');
+        loadData();
+      } else {
+        addToast("Recovery partial: " + (res.errors || []).join(', '), 'warning');
+      }
+    } catch (e) {
+      addToast("Cloud recovery failed", "error");
+    }
+    setRecovering(false);
   }
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
@@ -139,11 +179,17 @@ export default function SystemHealth() {
 
         <div className={`${card} p-4`}>
           <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-amber-500" />
-            <p className={`text-xs font-semibold uppercase ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Uptime</p>
+            <Activity className={`w-4 h-4 ${dbHealth.success ? 'text-emerald-500' : 'text-rose-500'}`} />
+            <p className={`text-xs font-semibold uppercase ${dm ? 'text-slate-400' : 'text-slate-500'}`}>DB Health</p>
           </div>
-          <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{Math.round((health?.uptime || 0) / 60)}m</p>
-          <p className={`text-xs mt-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>Node {health?.nodeVersion}</p>
+          <p className={`text-2xl font-bold ${dbHealth.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {dbHealth.success ? 'Healthy' : 'Issues Found'}
+          </p>
+          {!dbHealth.success ? (
+            <button onClick={handleRepair} className="text-xs text-blue-500 font-bold hover:underline">Repair Now</button>
+          ) : (
+            <p className={`text-xs mt-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>Integrity Verified</p>
+          )}
         </div>
       </div>
 
@@ -271,9 +317,9 @@ export default function SystemHealth() {
               </span>
             </div>
             <div className={`grid grid-cols-3 gap-3 text-center ${dm ? 'text-slate-300' : 'text-slate-600'}`}>
-              {['sales', 'expenses', 'products'].map(key => (
+              {['sales', 'expenses', 'products', 'suppliers', 'categories'].map(key => syncResult.synced?.[key] !== undefined && (
                 <div key={key} className={`rounded-lg py-2 ${dm ? 'bg-slate-800' : 'bg-white'}`}>
-                  <p className="text-lg font-bold">{syncResult.synced?.[key] ?? '—'}</p>
+                  <p className="text-lg font-bold">{syncResult.synced[key]}</p>
                   <p className={`text-xs capitalize ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{key}</p>
                 </div>
               ))}
@@ -285,6 +331,24 @@ export default function SystemHealth() {
             )}
           </div>
         )}
+
+        {/* Recovery Options moved inside Cloud Sync Section or separate */}
+        <div className={`mt-4 pt-4 border-t ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
+           <div className="flex items-center justify-between">
+              <div>
+                <h4 className={`text-sm font-bold ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Disaster Recovery</h4>
+                <p className="text-[10px] text-slate-500">Restore your shop data from Cloud after a system failure</p>
+              </div>
+              <button
+                onClick={handleCloudRecover}
+                disabled={recovering || !isOnline}
+                className={`flex items-center gap-2 px-4 py-2 border-2 text-sm font-semibold rounded-xl transition-all ${dm ? 'border-indigo-900/50 text-indigo-400 hover:bg-indigo-900/20' : 'border-indigo-100 text-indigo-600 hover:bg-indigo-50'} disabled:opacity-50`}
+              >
+                {recovering ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Recover from Cloud
+              </button>
+           </div>
+        </div>
       </div>
 
       {/* Software Update Section */}

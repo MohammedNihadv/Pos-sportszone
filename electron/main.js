@@ -3,11 +3,11 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
-import getDb, { initDb } from './db.js';
+import getDb, { initDb, checkDatabaseIntegrity, repairDatabase } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
-import { runFullSync, getLastSyncTime, startAutoSync } from './cloudSync.js';
+import { runFullSync, pullFromCloud, getLastSyncTime, startAutoSync } from './cloudSync.js';
 import { downloadReceiptPDF } from './receipt.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +59,24 @@ app.whenReady().then(() => {
 
   // Auto-backup on startup
   try { autoBackup(); } catch (e) { logError('StartupBackup', e); }
+
+  // Startup Database Health Check (Stage 1 Auto-Fix potential)
+  try { 
+    const health = checkDatabaseIntegrity();
+    if (!health.success) {
+       logError('DatabaseHealth', `Integrity check failed: ${health.error}`);
+       // Attempt Stage 1 silent auto-repair for minor indexing issues
+       const repair = repairDatabase();
+       if (repair.success) {
+         logInfo('DatabaseHealth', 'Stage 1 Auto-repair successful');
+       } else {
+         // Stage 2: Report to frontend for manual restore
+         logError('DatabaseHealth', 'Critical corruption: Stage 1 repair failed.');
+       }
+    } else {
+       logInfo('DatabaseHealth', 'Integrity check: Healthy');
+    }
+  } catch (e) { logError('StartupHealthCheck', e); }
 
   // Auto-cloud-sync loop
   try { startAutoSync(getDb()); } catch (e) { logError('StartupSync', e); }
@@ -138,14 +156,27 @@ safeHandle('restore-custom-file', async () => {
   }
   return result;
 });
+
 safeHandle('restore-backup', async (_, backupPath) => {
   const result = restoreBackup(backupPath);
   if (result.success) {
-    // Restart app to re-init DB after restore
     app.relaunch();
     app.exit(0);
   }
   return result;
+});
+
+// ─── IPC: Database Health & Repair ───
+safeHandle('get-db-health', () => {
+  return checkDatabaseIntegrity();
+});
+
+safeHandle('repair-db', () => {
+  return repairDatabase();
+});
+
+safeHandle('pull-from-cloud', async () => {
+  return await pullFromCloud(getDb());
 });
 
 // ─── IPC: Updater ───

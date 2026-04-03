@@ -92,33 +92,64 @@ async function syncProducts(db) {
   return { table: 'products', synced: rows.length };
 }
 
+async function syncSuppliers(db) {
+  const rows = db.prepare('SELECT * FROM suppliers ORDER BY id').all();
+  if (rows.length === 0) return { table: 'suppliers', synced: 0 };
+
+  const payload = rows.map(r => ({
+    local_id: r.id,
+    name: r.name,
+    phone: r.phone || '',
+    email: r.email || '',
+    address: r.address || '',
+  }));
+
+  const { error } = await supabase
+    .from('cloud_suppliers')
+    .upsert(payload, { onConflict: 'local_id' });
+
+  if (error) throw new Error(`cloud_suppliers upsert failed: ${error.message}`);
+  return { table: 'suppliers', synced: rows.length };
+}
+
+async function syncCategories(db) {
+  const rows = db.prepare('SELECT * FROM categories ORDER BY id').all();
+  if (rows.length === 0) return { table: 'categories', synced: 0 };
+
+  const payload = rows.map(r => ({
+    local_id: r.id,
+    name: r.name,
+  }));
+
+  const { error } = await supabase
+    .from('cloud_categories')
+    .upsert(payload, { onConflict: 'local_id' });
+
+  if (error) throw new Error(`cloud_categories upsert failed: ${error.message}`);
+  return { table: 'categories', synced: rows.length };
+}
+
 // ─── Full Sync Orchestrator ───
 
 export async function runFullSync(db) {
   const results = { success: false, synced: {}, errors: [], lastSync: null };
 
-  try {
-    const salesResult = await syncSales(db);
-    results.synced.sales = salesResult.synced;
-  } catch (err) {
-    results.errors.push(`Sales: ${err.message}`);
-    logError('CloudSync:Sales', err);
-  }
+  const syncTasks = [
+    { name: 'sales', fn: syncSales },
+    { name: 'expenses', fn: syncExpenses },
+    { name: 'products', fn: syncProducts },
+    { name: 'suppliers', fn: syncSuppliers },
+    { name: 'categories', fn: syncCategories }
+  ];
 
-  try {
-    const expensesResult = await syncExpenses(db);
-    results.synced.expenses = expensesResult.synced;
-  } catch (err) {
-    results.errors.push(`Expenses: ${err.message}`);
-    logError('CloudSync:Expenses', err);
-  }
-
-  try {
-    const productsResult = await syncProducts(db);
-    results.synced.products = productsResult.synced;
-  } catch (err) {
-    results.errors.push(`Products: ${err.message}`);
-    logError('CloudSync:Products', err);
+  for (const task of syncTasks) {
+    try {
+      const res = await task.fn(db);
+      results.synced[task.name] = res.synced;
+    } catch (err) {
+      results.errors.push(`${task.name}: ${err.message}`);
+      logError(`CloudSync:${task.name}`, err);
+    }
   }
 
   // Mark success if at least one table synced without error
@@ -129,11 +160,56 @@ export async function runFullSync(db) {
   return results;
 }
 
+export async function pullFromCloud(db) {
+  const results = { success: true, pulled: {}, errors: [] };
+  
+  const tables = [
+    { local: 'categories', cloud: 'cloud_categories' },
+    { local: 'suppliers', cloud: 'cloud_suppliers' },
+    { local: 'products', cloud: 'cloud_products' },
+    { local: 'expenses', cloud: 'cloud_expenses' },
+    { local: 'sales', cloud: 'cloud_sales' }
+  ];
+
+  for (const t of tables) {
+    try {
+      const { data, error } = await supabase.from(t.cloud).select('*');
+      if (error) throw error;
+      if (!data || data.length === 0) continue;
+
+      let count = 0;
+      const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'created_at');
+      
+      const placeholders = columns.map(c => c === 'local_id' ? '?' : '?').join(', ');
+      const colNames = columns.map(c => c === 'local_id' ? 'id' : c).join(', ');
+
+      const upsertStmt = db.prepare(`INSERT OR REPLACE INTO ${t.local} (${colNames}) VALUES (${placeholders})`);
+      
+      const transaction = db.transaction((rows) => {
+        for (const row of rows) {
+          const vals = columns.map(c => row[c]);
+          upsertStmt.run(...vals);
+          count++;
+        }
+      });
+
+      transaction(data);
+      results.pulled[t.local] = count;
+    } catch (err) {
+      results.success = false;
+      results.errors.push(`${t.local}: ${err.message}`);
+      logError(`CloudPull:${t.local}`, err);
+    }
+  }
+
+  return results;
+}
+
 export function startAutoSync(db) {
-  // Sync every 30 minutes
+  // Sync every 5 minutes (reduced from 30m for higher data safety)
   setInterval(() => {
     runFullSync(db).catch(err => logError('AutoSync', err));
-  }, 30 * 60 * 1000);
+  }, 5 * 60 * 1000);
 }
 
 export { getLastSyncTime };

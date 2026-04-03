@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('api', {
   restoreBackup: (path) => ipcRenderer.invoke('restore-backup', path),
   openBackupFolder: () => ipcRenderer.invoke('open-backup-folder'),
   restoreCustomFile: () => ipcRenderer.invoke('restore-custom-file'),
+  getDbHealth: () => ipcRenderer.invoke('get-db-health'),
+  repairDb: () => ipcRenderer.invoke('repair-db'),
 
   // ─── NEW: Auto Updater ───
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
@@ -70,6 +72,7 @@ contextBridge.exposeInMainWorld('api', {
   // ─── NEW: Cloud Sync ───
   syncToCloud: () => ipcRenderer.invoke('sync-to-cloud'),
   getLastSyncTime: () => ipcRenderer.invoke('get-last-sync-time'),
+  pullFromCloud: () => ipcRenderer.invoke('pull-from-cloud'),
 
   // ─── NEW: Receipt Download ───
   downloadReceipt: (sale) => ipcRenderer.invoke('download-receipt', sale),
