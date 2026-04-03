@@ -76,32 +76,46 @@ export function AppProvider({ children }) {
   const api = typeof window !== 'undefined' ? window.api : null;
 
   // Fetch initial data — with complete fallbacks
-  useEffect(() => {
-    async function loadData() {
-      if (api) {
-        try {
-          const [prod, supp, cats, expCats, sl, ex, pu] = await Promise.all([
-            api.getProducts(), api.getSuppliers(), api.getCategories(),
-            api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases()
-          ]);
-          setProducts(prod || []); setSuppliers(supp || []);
-          setCategories(cats || []); setExpenseCategories(expCats || []);
-          setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
-        } catch (err) {
-          console.warn('API load failed, using fallback data:', err);
-          setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
-          setCategories(DEFAULT_CATEGORIES); setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
-        }
-      } else {
-        // Browser-only mode: use defaults
-        setProducts(DEFAULT_PRODUCTS);
-        setSuppliers(DEFAULT_SUPPLIERS);
-        setCategories(DEFAULT_CATEGORIES);
-        setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+  const loadData = useCallback(async () => {
+    if (api) {
+      try {
+        const [prod, supp, cats, expCats, sl, ex, pu] = await Promise.all([
+          api.getProducts(), api.getSuppliers(), api.getCategories(),
+          api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases()
+        ]);
+        setProducts(prod || []); setSuppliers(supp || []);
+        setCategories(cats || []); setExpenseCategories(expCats || []);
+        setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
+      } catch (err) {
+        console.warn('API load failed, using fallback data:', err);
+        setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
+        setCategories(DEFAULT_CATEGORIES); setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
       }
+    } else {
+      setProducts(DEFAULT_PRODUCTS);
+      setSuppliers(DEFAULT_SUPPLIERS);
+      setCategories(DEFAULT_CATEGORIES);
+      setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
     }
+  }, [api]);
+
+  useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  const refreshProducts = useCallback(async () => {
+    if (api) {
+      const prod = await api.getProducts();
+      setProducts(prod || []);
+    }
+  }, [api]);
+
+  const refreshSales = useCallback(async () => {
+    if (api) {
+      const sl = await api.getSales();
+      setSales(sl || []);
+    }
+  }, [api]);
 
   // ─── Online/Offline Detection ───
   useEffect(() => {
@@ -232,6 +246,7 @@ export function AppProvider({ children }) {
     categories, setCategories, expenseCategories, setExpenseCategories,
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits, customers, setCustomers,
+    refreshProducts, refreshSales, loadData
   }), [
     darkMode, sidebarCollapsed, toasts, syncStatus, logo,
     isAdminUnlocked, adminPin, users, currentUser, isLocked,
@@ -240,6 +255,7 @@ export function AppProvider({ children }) {
     sales, expenses, purchases, credits, customers,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
+    refreshProducts, refreshSales, loadData
   ]);
 
   return (

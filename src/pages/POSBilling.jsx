@@ -196,10 +196,13 @@ function POSContent() {
 
     if (window.api) {
       await window.api.saveSale(saleData);
-      setProducts(prev => prev.map(p => {
-        const cartItem = cart.find(i => i.id === p.id);
-        return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
-      }));
+      // Fetch fresh data to update UI immediately
+      const [freshSales, freshProducts] = await Promise.all([
+        window.api.getSales(),
+        window.api.getProducts()
+      ]);
+      setSales(freshSales);
+      setProducts(freshProducts);
     } else {
       setSales(prev => [{ ...saleData, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);
       setProducts(prev => prev.map(p => {

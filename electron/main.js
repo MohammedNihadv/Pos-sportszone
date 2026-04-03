@@ -285,14 +285,24 @@ safeHandle('save-sale', (_, sale) => {
 });
 
 safeHandle('get-sales', () => {
-  const sales = getDb().prepare('SELECT * FROM sales ORDER BY date DESC').all();
-  return sales.map(s => ({ 
-    ...s, 
-    items: JSON.parse(s.items),
-    amountPaid: s.amount_paid,
-    changeAmount: s.change_amount,
-    paymentMethod: s.payment_method
-  }));
+  try {
+    const rawSales = getDb().prepare('SELECT * FROM sales ORDER BY date DESC').all();
+    return rawSales.map(s => {
+      let items = [];
+      try { items = JSON.parse(s.items || '[]'); } catch (e) { logError('ParseSaleItems', e); }
+      
+      return { 
+        ...s, 
+        items,
+        amountPaid: s.amount_paid,
+        changeAmount: s.change_amount,
+        paymentMethod: s.payment_method
+      };
+    });
+  } catch (err) {
+    logError('GetSales', err);
+    return [];
+  }
 });
 
 safeHandle('delete-sale', (_, id) => {

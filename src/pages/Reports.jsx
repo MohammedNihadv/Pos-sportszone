@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext';
 import { useState, useEffect } from 'react';
 
 export default function Reports() {
-  const { darkMode } = useApp();
+  const { darkMode, sales: s, purchases: p } = useApp();
   const dm = darkMode;
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
@@ -14,78 +14,70 @@ export default function Reports() {
   const [monthlyData, setMonthlyData] = useState([]);
   const [topItems, setTopItems] = useState([]);
   const [banking, setBanking] = useState({ cash: 0, upi: 0 });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const s = window.api ? await window.api.getSales() : [];
-        const p = window.api ? await window.api.getPurchases() : [];
-
-        // Calculate last 6 months data
-        const months = {};
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date();
-          d.setMonth(d.getMonth() - i);
-          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-          months[key] = { month: d.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0, rawSales: [] };
-        }
-
-        let totalCash = 0; let totalUpi = 0;
-        s.forEach(sale => {
-          const d = new Date(sale.date);
-          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-          if (months[key]) {
-            months[key].sales += sale.total;
-            const cost = sale.items.reduce((sum, item) => sum + (item.cost || 0) * item.qty, 0);
-            months[key].profit += (sale.total - cost);
-            months[key].rawSales.push(sale);
-          }
-          
-          if (sale.payment_method?.toLowerCase() === 'cash') totalCash += sale.total;
-          else if (sale.payment_method?.toLowerCase().includes('upi') || sale.payment_method?.toLowerCase().includes('bank')) totalUpi += sale.total;
-        });
-        
-        setBanking({ cash: totalCash, upi: totalUpi });
-
-        p.forEach(purchase => {
-          const d = new Date(purchase.date);
-          const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-          if (months[key]) {
-            months[key].purchase += purchase.total;
-          }
-        });
-
-        setMonthlyData(Object.values(months));
-
-        // Top items all-time or last 6 months
-        const itemStats = {};
-        s.forEach(sale => {
-          sale.items.forEach(item => {
-            if (!itemStats[item.name]) itemStats[item.name] = { name: item.name, qty: 0, revenue: 0, cost: 0 };
-            itemStats[item.name].qty += item.qty;
-            itemStats[item.name].revenue += (item.price * item.qty);
-            itemStats[item.name].cost += ((item.cost || 0) * item.qty);
-          });
-        });
-
-        const sortedItems = Object.values(itemStats)
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 5)
-          .map(i => {
-             const m = i.revenue > 0 ? ((i.revenue - i.cost) / i.revenue) * 100 : 0;
-             return { ...i, margin: Math.round(m) + '%' };
-          });
-        setTopItems(sortedItems);
-
-      } catch (err) {
-        console.error(err);
+    if (!s || !p) return;
+    function calculateStats() {
+      // Calculate last 6 months data
+      const months = {};
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        months[key] = { month: d.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0, rawSales: [] };
       }
-      setLoading(false);
+
+      let totalCash = 0; let totalUpi = 0;
+      s.forEach(sale => {
+        const d = new Date(sale.date || sale.created_at || new Date());
+        const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        if (months[key]) {
+          months[key].sales += sale.total;
+          const cost = (sale.items || []).reduce((sum, item) => sum + (item.cost || 0) * item.qty, 0);
+          months[key].profit += (sale.total - cost);
+          months[key].rawSales.push(sale);
+        }
+        
+        const pm = (sale.paymentMethod || sale.payment_method || '').toLowerCase();
+        if (pm === 'cash') totalCash += sale.total;
+        else if (pm.includes('upi') || pm.includes('bank') || pm.includes('card')) totalUpi += sale.total;
+      });
+      
+      setBanking({ cash: totalCash, upi: totalUpi });
+
+      p.forEach(purchase => {
+        const d = new Date(purchase.date || new Date());
+        const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        if (months[key]) {
+          months[key].purchase += purchase.total;
+        }
+      });
+
+      setMonthlyData(Object.values(months));
+
+      // Top items
+      const itemStats = {};
+      s.forEach(sale => {
+        (sale.items || []).forEach(item => {
+          if (!itemStats[item.name]) itemStats[item.name] = { name: item.name, qty: 0, revenue: 0, cost: 0 };
+          itemStats[item.name].qty += item.qty;
+          itemStats[item.name].revenue += (item.price * item.qty);
+          itemStats[item.name].cost += ((item.cost || 0) * item.qty);
+        });
+      });
+
+      const sortedItems = Object.values(itemStats)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5)
+        .map(i => {
+           const m = i.revenue > 0 ? ((i.revenue - i.cost) / i.revenue) * 100 : 0;
+           return { ...i, margin: Math.round(m) + '%' };
+        });
+      setTopItems(sortedItems);
     }
-    loadData();
-  }, []);
+    calculateStats();
+  }, [s, p]);
 
   const current = monthlyData.length > 0 ? monthlyData[monthlyData.length - 1] : { purchase: 0, sales: 0, profit: 0 };
   const totalSalesAll = monthlyData.reduce((acc, curr) => acc + curr.sales, 0);

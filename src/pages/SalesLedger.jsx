@@ -110,9 +110,9 @@ export default function SalesLedger() {
       description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
       cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
       selling: s.total || 0,
-      payment_method: s.payment_method || 'Cash',
-      amountPaid: s.amountPaid || s.total || 0,
-      changeAmount: s.changeAmount || 0,
+      payment_method: s.paymentMethod || s.payment_method || 'Cash',
+      amountPaid: s.amountPaid || s.amount_paid || s.total || 0,
+      changeAmount: s.changeAmount || s.change_amount || 0,
       items: (s.items || []).length,
       isLive: true,
     }));
