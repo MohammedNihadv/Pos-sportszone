@@ -37,6 +37,10 @@ async function syncSales(db) {
     payment_method: r.payment_method || 'cash',
     customer_id: r.customer_id || null,
     items: r.items, // JSON string
+    amount_paid: r.amount_paid || r.total || 0,
+    change_amount: r.change_amount || 0,
+    payment_breakdown: r.payment_breakdown || null, // JSON string
+    change_return_method: r.change_return_method || null,
   }));
 
   const { error } = await supabase

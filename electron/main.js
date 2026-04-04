@@ -296,13 +296,13 @@ safeHandle('delete-expense-category', (_, id) => {
 // ─── IPC: Sales ───
 safeHandle('save-sale', (_, sale) => {
   if (sale.id) {
-    getDb().prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=? WHERE id=?')
-      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.id);
+    getDb().prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=? WHERE id=?')
+      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.paymentBreakdown ? JSON.stringify(sale.paymentBreakdown) : null, sale.changeReturnMethod || null, sale.id);
     logAudit('Updated Sale', `Sale ID ${sale.id} updated (Method: ${sale.paymentMethod})`);
     return { id: sale.id };
   } else {
-    const info = getDb().prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items));
+    const info = getDb().prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.paymentBreakdown ? JSON.stringify(sale.paymentBreakdown) : null, sale.changeReturnMethod || null);
 
     const updateStock = getDb().prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
     sale.items.forEach(item => {
@@ -317,14 +317,18 @@ safeHandle('get-sales', () => {
     const rawSales = getDb().prepare('SELECT * FROM sales ORDER BY date DESC').all();
     return rawSales.map(s => {
       let items = [];
+      let paymentBreakdown = [];
       try { items = JSON.parse(s.items || '[]'); } catch (e) { logError('ParseSaleItems', e); }
+      try { paymentBreakdown = JSON.parse(s.payment_breakdown || '[]'); } catch (e) { /* ignore */ }
       
       return { 
         ...s, 
         items,
         amountPaid: s.amount_paid,
         changeAmount: s.change_amount,
-        paymentMethod: s.payment_method
+        paymentMethod: s.payment_method,
+        paymentBreakdown: paymentBreakdown.length > 0 ? paymentBreakdown : [{ method: s.payment_method || 'cash', amount: s.amount_paid || s.total }],
+        changeReturnMethod: s.change_return_method
       };
     });
   } catch (err) {

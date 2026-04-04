@@ -27,6 +27,25 @@ const getDeviceInfo = () => {
 
 export const syncDeviceTelemetry = async () => {
   try {
+    // Check for Force Actions from Developer Dashboard
+    const { data: remoteDevice } = await supabase
+      .from('device_telemetry')
+      .select('force_action')
+      .eq('machine_id', deviceId)
+      .single();
+
+    if (remoteDevice && remoteDevice.force_action) {
+      if (remoteDevice.force_action === 'disable') {
+        console.error("🚨 REMOTE KILL SWITCH ACTIVATED 🚨");
+        app.exit(0); // Instantly kill the POS
+        return;
+      }
+      if (remoteDevice.force_action === 'update') {
+         console.log("Force update requested remotely.");
+         // Future: trigger electron-updater
+      }
+    }
+
     const deviceInfo = {
       machine_id: deviceId,
       app_version: app.getVersion(),
@@ -46,7 +65,9 @@ export const syncDeviceTelemetry = async () => {
       console.log("Telemetry synced successfully.");
     }
   } catch (err) {
-    console.error("Error during telemetry sync:", err);
+    if (err.message && !err.message.includes('Row not found')) {
+       console.error("Error during telemetry sync:", err);
+    }
   }
 };
 

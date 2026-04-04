@@ -10,7 +10,7 @@ function getContext() {
 
 export function playSound(type) {
   try {
-    if (localStorage.getItem('sz_sound_enabled') === 'false') return;
+    if (localStorage.getItem('sz_soundEnabled') === 'false') return;
     
     const ctx = getContext();
     if (ctx.state === 'suspended') {

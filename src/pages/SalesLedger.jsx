@@ -5,9 +5,13 @@ import { useApp } from '../context/AppContext';
 
 function SaleModal({ sale, onClose, onSave, dm }) {
   const isNew = !sale;
+  const initBreakdown = sale?.paymentBreakdown || [{ method: sale?.payment_method || 'cash', amount: sale?.amountPaid || '' }];
+  
   const [form, setForm] = useState(sale || {
-    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'Cash', amountPaid: '', changeAmount: ''
+    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'cash', amountPaid: '', changeAmount: '', paymentBreakdown: [{ method: 'cash', amount: '' }], changeReturnMethod: 'cash'
   });
+
+  const [breakdown, setBreakdown] = useState(initBreakdown.map(b => ({ ...b })));
 
   // Auto-calculate change
   const calcChange = (received, total) => {
@@ -15,6 +19,29 @@ function SaleModal({ sale, onClose, onSave, dm }) {
     const t = parseFloat(total);
     if (!isNaN(r) && !isNaN(t) && r >= t) return (r - t).toFixed(2);
     return '0.00';
+  };
+
+  const updateBreakdown = (idx, field, val) => {
+    const newB = [...breakdown];
+    newB[idx][field] = val;
+    setBreakdown(newB);
+    
+    // Auto-sum amount received
+    const totalReceived = newB.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
+    setForm(p => ({
+      ...p, 
+      amountPaid: totalReceived, 
+      changeAmount: calcChange(totalReceived, p.selling),
+      payment_method: newB.length === 1 ? newB[0].method : 'split'
+    }));
+  };
+
+  const addBreakdown = () => setBreakdown([...breakdown, { method: 'upi', amount: '' }]);
+  const removeBreakdown = (idx) => {
+    const newB = breakdown.filter((_, i) => i !== idx);
+    setBreakdown(newB);
+    const totalReceived = newB.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
+    setForm(p => ({ ...p, amountPaid: totalReceived, changeAmount: calcChange(totalReceived, p.selling), payment_method: newB.length === 1 ? newB[0].method : 'split' }));
   };
 
   const handleSave = () => {
@@ -26,6 +53,7 @@ function SaleModal({ sale, onClose, onSave, dm }) {
       selling: parseFloat(form.selling),
       amountPaid: parseFloat(form.amountPaid) || parseFloat(form.selling),
       changeAmount: parseFloat(form.changeAmount) || 0,
+      paymentBreakdown: breakdown,
       items: form.description.split(',').length,
     });
     onClose();
@@ -37,8 +65,8 @@ function SaleModal({ sale, onClose, onSave, dm }) {
   const pct = form.cost && form.selling ? ((profit / parseFloat(form.cost)) * 100).toFixed(1) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto py-10">
+      <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl overflow-hidden my-auto ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Sale Entry' : 'Edit Sale Entry'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
@@ -53,30 +81,63 @@ function SaleModal({ sale, onClose, onSave, dm }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>
-            <div><label className={labelCls}>Selling Price (₹)</label><input type="number" className={inputCls} value={form.selling} onChange={e => setForm(p => ({...p, selling: e.target.value}))} /></div>
-          </div>
-          <div>
-             <label className={labelCls}>Payment Method</label>
-             <select className={inputCls} value={form.payment_method || 'Cash'} onChange={e => setForm(p => ({...p, payment_method: e.target.value}))}>
-               <option>Cash</option>
-               <option>UPI</option>
-               <option>Card</option>
-               <option>split</option>
-             </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border-2 border-dashed bg-blue-50/50 dark:bg-blue-900/10 dark:border-slate-700">
             <div>
-              <label className={labelCls}>Amount Received</label>
-              <input type="number" placeholder={form.selling || '0'} className={inputCls} value={form.amountPaid} onChange={e => {
-                const received = e.target.value;
-                setForm(p => ({...p, amountPaid: received, changeAmount: calcChange(received, p.selling) }));
+              <label className={labelCls}>Selling Price (₹)</label>
+              <input type="number" className={inputCls} value={form.selling} onChange={e => {
+                const s = e.target.value;
+                setForm(p => ({...p, selling: s, changeAmount: calcChange(p.amountPaid, s)}));
               }} />
             </div>
-            <div>
-              <label className={labelCls}>Change Returned</label>
-              <input type="number" readOnly className={`${inputCls} opacity-80 cursor-not-allowed`} value={form.changeAmount || '0.00'} />
+          </div>
+
+          {/* Payment Breakdown Edit Segment */}
+          <div className={`p-3 rounded-xl border ${dm ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+            <div className="flex justify-between items-center mb-2">
+              <label className={labelCls + ' !mb-0'}>Payment Breakdown</label>
+              <button onClick={addBreakdown} className="text-xs font-bold text-blue-500 hover:text-blue-700">+ Add Method</button>
+            </div>
+            <div className="space-y-2 mb-3">
+              {breakdown.map((b, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <select className={inputCls + ' !w-2/5 !py-2'} value={b.method} onChange={e => updateBreakdown(idx, 'method', e.target.value)}>
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="credit">Pay Later</option>
+                  </select>
+                  <input type="number" placeholder="Amount" className={inputCls + ' !py-2'} value={b.amount} onChange={e => updateBreakdown(idx, 'amount', e.target.value)} />
+                  {breakdown.length > 1 && (
+                    <button onClick={() => removeBreakdown(idx)} className="text-red-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex justify-between items-center text-sm border-t pt-2 border-dashed border-slate-300 dark:border-slate-600">
+              <span className="font-semibold text-slate-500">Total Received:</span>
+              <span className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{parseFloat(form.amountPaid || 0).toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Return Change Via Segment */}
+          {parseFloat(form.changeAmount || 0) > 0 && (
+            <div className={`grid grid-cols-2 gap-3 p-3 items-center rounded-xl border-2 border-dashed ${dm ? 'bg-amber-900/10 border-amber-800/50' : 'bg-amber-50/50 border-amber-200'}`}>
+              <div>
+                <label className={labelCls}>Change Due</label>
+                <div className={`text-xl font-bold ${dm ? 'text-amber-400' : 'text-amber-600'}`}>₹{form.changeAmount}</div>
+              </div>
+              <div>
+                <label className={labelCls}>Return Via</label>
+                <div className="flex gap-2">
+                  {['cash', 'store-upi'].map(m => (
+                    <button key={m} onClick={() => setForm({...form, changeReturnMethod: m})} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${form.changeReturnMethod === m ? 'bg-amber-100 border-amber-400 text-amber-700' : (dm ? 'bg-slate-800 border-slate-600 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600')}`}>
+                      {m === 'cash' ? 'Cash' : 'Store UPI'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {form.cost && form.selling && (
             <div className={`rounded-xl p-3 text-center ${profit >= 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-red-900/30' : 'bg-red-50')}`}>
               <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -110,9 +171,11 @@ export default function SalesLedger() {
       description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
       cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
       selling: s.total || 0,
-      payment_method: s.paymentMethod || s.payment_method || 'Cash',
+      payment_method: s.paymentMethod || s.payment_method || 'cash',
       amountPaid: s.amountPaid || s.amount_paid || s.total || 0,
       changeAmount: s.changeAmount || s.change_amount || 0,
+      paymentBreakdown: s.paymentBreakdown || s.payment_breakdown || [{ method: s.paymentMethod || s.payment_method || 'cash', amount: s.amountPaid || s.amount_paid || s.total || 0}],
+      changeReturnMethod: s.changeReturnMethod || s.change_return_method || 'cash',
       items: (s.items || []).length,
       isLive: true,
     }));
@@ -143,7 +206,9 @@ export default function SalesLedger() {
            total: entry.selling,
            paymentMethod: entry.payment_method,
            amountPaid: entry.amountPaid,
-           changeAmount: entry.changeAmount
+           changeAmount: entry.changeAmount,
+           paymentBreakdown: entry.paymentBreakdown,
+           changeReturnMethod: entry.changeReturnMethod
         };
         if (window.api) {
            await window.api.saveSale(updated);
