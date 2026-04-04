@@ -109,14 +109,15 @@ export function AppProvider({ children }) {
   const loadData = useCallback(async () => {
     if (api) {
       try {
-        const [prod, supp, cats, expCats, sl, ex, pu, settings] = await Promise.all([
+        const [prod, supp, cats, expCats, sl, ex, pu, settings, dbUsers] = await Promise.all([
           api.getProducts(), api.getSuppliers(), api.getCategories(),
           api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases(),
-          api.getSettings()
+          api.getSettings(), api.getUsers()
         ]);
         setProducts(prod || []); setSuppliers(supp || []);
         setCategories(cats || []); setExpenseCategories(expCats || []);
         setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
+        setUsers(dbUsers || []);
         
         if (settings && Object.keys(settings).length > 0) {
           setAppSettingsState(prev => ({ ...prev, ...settings }));
@@ -125,12 +126,22 @@ export function AppProvider({ children }) {
         console.warn('API load failed, using fallback data:', err);
         setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
         setCategories(DEFAULT_CATEGORIES); setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+        setUsers([
+          { id: 1, role: 'Admin', name: 'Admin', pin: '1234' },
+          { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
+          { id: 3, role: 'Owner', name: 'Owner', pin: '1111' },
+        ]);
       }
     } else {
       setProducts(DEFAULT_PRODUCTS);
       setSuppliers(DEFAULT_SUPPLIERS);
       setCategories(DEFAULT_CATEGORIES);
       setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+      setUsers([
+        { id: 1, role: 'Admin', name: 'Admin', pin: '1234' },
+        { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
+        { id: 3, role: 'Owner', name: 'Owner', pin: '1111' },
+      ]);
     }
   }, [api]);
 
@@ -181,19 +192,7 @@ export function AppProvider({ children }) {
     } catch { return false; }
   });
   
-  const [users, setUsers] = useState(() => {
-    const defaults = [
-      { role: 'Admin', name: 'Admin', pin: '1234' },
-      { role: 'Cashier', name: 'Cashier', pin: '0000' },
-      { role: 'Owner', name: 'Owner', pin: '1111' },
-    ];
-    try {
-      const stored = JSON.parse(localStorage.getItem('sz_users'));
-      if (stored) return stored;
-      return defaults;
-    } catch { return defaults; }
-  });
-
+  const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUserState] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sz_current_user')) || null; }
     catch { return null; }
@@ -215,15 +214,13 @@ export function AppProvider({ children }) {
   const isOwner = currentUser?.role === 'Owner';
 
   const setLogo = useCallback((newLogo) => { setLogoState(newLogo); localStorage.setItem('sz_logo', newLogo); }, []);
-  const updateAdminPin = useCallback((newPin) => { 
-    setAdminPinState(newPin); 
-    localStorage.setItem('sz_admin_pin', newPin);
-    setUsers(prev => {
-      const nu = prev.map(u => u.role === 'Admin' ? { ...u, pin: newPin } : u);
-      localStorage.setItem('sz_users', JSON.stringify(nu));
-      return nu;
-    });
-  }, []);
+  const updateAdminPin = useCallback(async (newPin) => { 
+    if (api) {
+      await api.updatePin({ userId: 1, newPin }); // Admin is ID 1
+      const freshUsers = await api.getUsers();
+      setUsers(freshUsers);
+    }
+  }, [api]);
   const lockAdmin = useCallback(() => setIsAdminUnlocked(false), []);
 
   // Toggles setters (now just save to global settings)

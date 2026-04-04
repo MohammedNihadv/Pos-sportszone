@@ -314,6 +314,7 @@ export default function SalesLedger() {
               <th className={th + ' text-right'}>Selling (₹)</th>
               <th className={th + ' text-right'}>Profit (₹)</th>
               <th className={th + ' text-right'}>Margin</th>
+              <th className={th + ' text-right'}>Amount Paid</th>
               {!isOwner && <th className={th + ' text-center'}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
@@ -337,6 +338,7 @@ export default function SalesLedger() {
                     <td className="px-4 py-3.5 text-right">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
                     </td>
+                    <td className={`px-4 py-3.5 text-right font-bold ${dm ? 'text-emerald-400' : 'text-emerald-600'}`}>₹{s.amountPaid?.toLocaleString() || s.selling.toLocaleString()}</td>
                     {!isOwner && (
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-2">

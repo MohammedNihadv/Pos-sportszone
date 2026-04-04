@@ -51,8 +51,10 @@ contextBridge.exposeInMainWorld('api', {
   logRendererError: (data) => ipcRenderer.invoke('log-renderer-error', data),
 
   // ─── NEW: Security & Auth ───
-  verifyPin: (pin) => ipcRenderer.invoke('verify-pin', pin),
-  updatePin: (newPin) => ipcRenderer.invoke('update-pin', newPin),
+  getUsers: () => ipcRenderer.invoke('get-users'),
+  saveUser: (user) => ipcRenderer.invoke('save-user', user),
+  verifyPin: (data) => ipcRenderer.invoke('verify-pin', data),
+  updatePin: (data) => ipcRenderer.invoke('update-pin', data),
 
   // ─── NEW: Backup & Restore ───
   createBackup: () => ipcRenderer.invoke('create-backup'),

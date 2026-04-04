@@ -8,7 +8,7 @@ export default function Settings() {
     darkMode, setDarkMode, addToast, logo, setLogo, 
     updateAdminPin, 
     users, setUsers, 
-    setCurrentUser, 
+    currentUser, setCurrentUser, 
     appSettings, saveAppSettings,
     categories, setCategories,
     expenseCategories, setExpenseCategories,
@@ -105,6 +105,32 @@ export default function Settings() {
       if (window.api) await window.api.deleteSupplier(id);
       setSuppliers(prev => prev.filter(s => s.id !== id));
       addToast('Supplier removed', 'warning');
+    }
+  };
+
+  const [pinChange, setPinChange] = useState({ userId: null, newPin: '', confirmPin: '' });
+
+  const handleUpdatePin = async () => {
+    if (!pinChange.newPin || pinChange.newPin.length !== 4) {
+      addToast('PIN must be 4 digits', 'error');
+      return;
+    }
+    if (pinChange.newPin !== pinChange.confirmPin) {
+      addToast('PINs do not match', 'error');
+      return;
+    }
+
+    if (window.api) {
+      const success = await window.api.updatePin({ userId: pinChange.userId, newPin: pinChange.newPin });
+      if (success) {
+        addToast('Security PIN updated successfully!', 'success');
+        setPinChange({ userId: null, newPin: '', confirmPin: '' });
+        // Refresh users in context
+        const freshUsers = await window.api.getUsers();
+        setUsers(freshUsers);
+      } else {
+        addToast('Failed to update PIN', 'error');
+      }
     }
   };
 
@@ -295,6 +321,81 @@ export default function Settings() {
               <button disabled={isOwner} onClick={() => !isOwner && handleToggle('autoSync')} className={toggleCls(localSettings.autoSync) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}>
                 <span className={thumbCls(localSettings.autoSync)} />
               </button>
+            </div>
+          </div>
+
+          {/* Account Security - New Section */}
+          <div className={`${card} p-6`}>
+            <h3 className={`font-bold mb-6 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+               <Shield className="w-4 h-4 text-blue-500" /> Account Security
+            </h3>
+            
+            <div className="space-y-6">
+              {users.filter(u => isOwner ? u.role === 'Owner' : true).map(user => (
+                <div key={user.id} className={`p-4 rounded-xl border ${dm ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${user.role === 'Admin' ? 'bg-indigo-600' : user.role === 'Owner' ? 'bg-amber-600' : 'bg-emerald-600'}`}>
+                        {user.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className={`font-bold text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>{user.name}</p>
+                        <p className="text-[10px] uppercase font-bold text-blue-500 tracking-wider">{user.role}</p>
+                      </div>
+                    </div>
+                    {pinChange.userId !== user.id ? (
+                      <button 
+                        onClick={() => setPinChange({ userId: user.id, newPin: '', confirmPin: '' })}
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all"
+                      >
+                        Change PIN
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => setPinChange({ userId: null, newPin: '', confirmPin: '' })}
+                        className={`p-1.5 rounded-lg ${dm ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-400 hover:bg-slate-200'} transition-all`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {pinChange.userId === user.id && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">New 4-Digit PIN</label>
+                          <input 
+                            type="password" 
+                            maxLength={4}
+                            className={inputCls}
+                            value={pinChange.newPin}
+                            onChange={e => setPinChange({...pinChange, newPin: e.target.value.replace(/\D/g, '')})}
+                            placeholder="****"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Confirm PIN</label>
+                          <input 
+                            type="password" 
+                            maxLength={4}
+                            className={inputCls}
+                            value={pinChange.confirmPin}
+                            onChange={e => setPinChange({...pinChange, confirmPin: e.target.value.replace(/\D/g, '')})}
+                            placeholder="****"
+                          />
+                        </div>
+                      </div>
+                      <button 
+                        onClick={handleUpdatePin}
+                        className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-600/20"
+                      >
+                        Apply New Security PIN
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

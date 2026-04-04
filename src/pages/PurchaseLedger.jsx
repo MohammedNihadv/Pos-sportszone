@@ -15,7 +15,13 @@ const OPENING_BALANCE = 0;
 function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
   const isNew = !entry;
   const [form, setForm] = useState(entry || {
-    date: new Date().toISOString().split('T')[0], inv: '', supplier: suppliersList[0] || '', debit: '', credit: '', note: ''
+    date: new Date().toISOString().split('T')[0], 
+    inv: '', 
+    supplier: suppliersList[0] || '', 
+    debit: '', 
+    credit: '', 
+    note: '',
+    paymentMethod: 'Cash'
   });
 
   const handleSave = () => {
@@ -52,7 +58,19 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
             <div><label className={labelCls}>Debit (₹ Purchased)</label><input type="number" className={inputCls} value={form.debit || ''} onChange={e => setForm(p => ({...p, debit: e.target.value}))} placeholder="0" /></div>
             <div><label className={labelCls}>Credit (₹ Paid/Returned)</label><input type="number" className={inputCls} value={form.credit || ''} onChange={e => setForm(p => ({...p, credit: e.target.value}))} placeholder="0" /></div>
           </div>
-          <div><label className={labelCls}>Note</label><input className={inputCls} value={form.note} onChange={e => setForm(p => ({...p, note: e.target.value}))} placeholder="Payment, Return, etc." /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Payment Method</label>
+              <select className={inputCls} value={form.paymentMethod || 'Cash'} onChange={e => setForm(p => ({...p, paymentMethod: e.target.value}))}>
+                <option>Cash</option>
+                <option>UPI</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Note</label>
+              <input className={inputCls} value={form.note} onChange={e => setForm(p => ({...p, note: e.target.value}))} placeholder="Payment, Return, etc." />
+            </div>
+          </div>
         </div>
         <div className="flex gap-3 px-5 pb-5">
           <button onClick={onClose} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border ${dm ? 'border-slate-600 text-slate-300' : 'border-slate-200 text-slate-600'}`}>Cancel</button>
@@ -116,7 +134,7 @@ export default function PurchaseLedger() {
       items: entry._original?.items || 0,
       total: entry.debit || 0,
       paid: entry.credit || 0,
-      paymentMethod: entry._original?.paymentMethod || 'Cash',
+      paymentMethod: entry.paymentMethod || 'Cash',
       status: entry.note || ((entry.debit || 0) === (entry.credit || 0) ? 'paid' : 'pending'),
     };
 
@@ -222,43 +240,42 @@ export default function PurchaseLedger() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className={dm ? 'border-slate-700 bg-slate-800' : 'border-slate-100 bg-slate-50'}>
-              <th className={`px-5 py-4 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Date</th>
-              <th className={`px-5 py-4 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Reference</th>
-              <th className={`px-5 py-4 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier / Note</th>
-              <th className={`px-5 py-4 text-right text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Liability Added (₹)</th>
-              <th className={`px-5 py-4 text-right text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Amount Settled (₹)</th>
-              <th className={`px-5 py-4 text-right text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Current Debt (₹)</th>
-              {!isOwner && <th className={`px-5 py-4 text-center text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Manage</th>}
+            <thead><tr className={`border-b-2 ${dm ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
+              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Date</th>
+              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Invoice</th>
+              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</th>
+              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Note</th>
+              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Debit (₹)</th>
+              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Credit (₹)</th>
+              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Balance (₹)</th>
+              {!isOwner && <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-800' : 'divide-slate-100/60'}`}>
               {withBalance.map(e => {
                 const isPaid = e.note?.toLowerCase() === 'paid';
                 const isPartial = e.note?.toLowerCase() === 'partial';
                 return (
-                  <tr key={e.id} className={`transition-colors text-sm ${dm ? 'hover:bg-slate-800/50 bg-slate-900' : 'hover:bg-blue-50/50 bg-white'}`}>
-                    <td className={`px-5 py-4 text-xs font-bold uppercase tracking-wide ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.date}</td>
-                    <td className="px-5 py-4 text-xs font-bold font-mono text-slate-500 dark:text-slate-400">
-                      {e.inv || <span className="opacity-40">AUTO-{e.id?.slice(-4) || 'REF'}</span>}
+                  <tr key={e.id} className={`transition-colors text-sm ${dm ? 'hover:bg-slate-800/50 bg-slate-900 border-b border-slate-800' : 'hover:bg-slate-50 bg-white border-b border-slate-100'}`}>
+                    <td className={`px-5 py-4 text-xs font-mono font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.date}</td>
+                    <td className="px-5 py-4 text-xs font-semibold text-blue-500">
+                      {e.inv || '—'}
                     </td>
-                    <td className="px-5 py-4">
-                       <p className={`font-bold ${dm ? 'text-slate-200' : 'text-slate-800'}`}>{e.supplier}</p>
-                       <div className="flex items-center gap-2 mt-1">
-                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${isPaid ? (dm ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isPartial ? (dm ? 'bg-amber-900/40 text-amber-400' : 'bg-amber-100 text-amber-700') : (dm ? 'bg-red-900/40 text-red-400' : 'bg-red-100 text-red-700')}`}>
-                            {e.note || 'PENDING'}
-                         </span>
-                       </div>
+                    <td className={`px-5 py-4 font-bold text-sm ${dm ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {e.supplier}
                     </td>
-                    <td className="px-5 py-4 text-right font-bold text-slate-400 dark:text-slate-500">{e.debit ? `₹${e.debit.toLocaleString()}` : '—'}</td>
-                    <td className="px-5 py-4 text-right font-bold text-emerald-600">{e.credit ? `₹${e.credit.toLocaleString()}` : '—'}</td>
-                    <td className={`px-5 py-4 text-right font-black ${dm ? 'text-red-400' : 'text-red-600'}`}>₹{e.running.toLocaleString()}</td>
+                    <td className={`px-5 py-4 text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {e.note || '—'}
+                    </td>
+                    <td className="px-5 py-4 text-center font-bold text-red-500">{e.debit ? `₹${e.debit}` : '—'}</td>
+                    <td className="px-5 py-4 text-center font-bold text-green-500">{e.credit ? `₹${e.credit}` : '—'}</td>
+                    <td className="px-5 py-4 text-center font-bold text-blue-600">₹{e.running}</td>
                     {!isOwner && (
                       <td className="px-5 py-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => setModal(e)} className={`p-2 rounded-lg transition-colors ${dm ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'}`} title="Edit">
+                        <div className="flex items-center justify-center gap-3">
+                          <button onClick={() => setModal(e)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDelete(e.id, e.supplier)} className={`p-2 rounded-lg transition-colors ${dm ? 'text-slate-400 hover:text-red-400 hover:bg-red-900/30' : 'text-slate-500 hover:text-red-600 hover:bg-red-50'}`} title="Delete">
+                          <button onClick={() => handleDelete(e.id, e.supplier)} className="text-red-400 hover:text-red-600 transition-colors" title="Delete">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -270,11 +287,11 @@ export default function PurchaseLedger() {
             </tbody>
             {withBalance.length > 0 && (
               <tfoot>
-                <tr className={`border-t-4 font-bold ${dm ? 'border-slate-800 bg-slate-900 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-800'}`}>
-                  <td colSpan={3} className="px-5 py-4 text-right uppercase tracking-wider text-[10px]">Net Totals</td>
-                  <td className="px-5 py-4 text-right">₹{totalDebit.toLocaleString()}</td>
-                  <td className="px-5 py-4 text-right text-emerald-600">₹{totalCredit.toLocaleString()}</td>
-                  <td className="px-5 py-4 text-right text-red-500 text-lg">₹{finalBalance.toLocaleString()}</td>
+                <tr className={`border-t-2 font-bold ${dm ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+                  <td colSpan={4} className={`px-5 py-4 text-left text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Total</td>
+                  <td className="px-5 py-4 text-center text-red-500">₹{totalDebit}</td>
+                  <td className="px-5 py-4 text-center text-green-500">₹{totalCredit}</td>
+                  <td className="px-5 py-4 text-center text-blue-600">₹{finalBalance}</td>
                   {!isOwner && <td />}
                 </tr>
               </tfoot>

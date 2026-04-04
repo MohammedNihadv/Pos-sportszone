@@ -133,6 +133,25 @@ async function syncCategories(db) {
   return { table: 'categories', synced: rows.length };
 }
 
+async function syncUsers(db) {
+  const rows = db.prepare('SELECT * FROM users ORDER BY id').all();
+  if (rows.length === 0) return { table: 'users', synced: 0 };
+
+  const payload = rows.map(r => ({
+    local_id: r.id,
+    name: r.name,
+    role: r.role,
+    pin: r.pin // Only PIN for recovery as requested
+  }));
+
+  const { error } = await supabase
+    .from('cloud_users')
+    .upsert(payload, { onConflict: 'local_id' });
+
+  if (error) throw new Error(`cloud_users upsert failed: ${error.message}`);
+  return { table: 'users', synced: rows.length };
+}
+
 // ─── Full Sync Orchestrator ───
 
 export async function runFullSync(db) {
@@ -143,7 +162,8 @@ export async function runFullSync(db) {
     { name: 'expenses', fn: syncExpenses },
     { name: 'products', fn: syncProducts },
     { name: 'suppliers', fn: syncSuppliers },
-    { name: 'categories', fn: syncCategories }
+    { name: 'categories', fn: syncCategories },
+    { name: 'users', fn: syncUsers }
   ];
 
   for (const task of syncTasks) {
@@ -172,7 +192,8 @@ export async function pullFromCloud(db) {
     { local: 'suppliers', cloud: 'cloud_suppliers' },
     { local: 'products', cloud: 'cloud_products' },
     { local: 'expenses', cloud: 'cloud_expenses' },
-    { local: 'sales', cloud: 'cloud_sales' }
+    { local: 'sales', cloud: 'cloud_sales' },
+    { local: 'users', cloud: 'cloud_users' }
   ];
 
   for (const t of tables) {

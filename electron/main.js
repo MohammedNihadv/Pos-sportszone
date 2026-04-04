@@ -1,9 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
-import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint } from './db.js';
+import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint, getUsers, updateUserPin, saveUser } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
@@ -222,17 +219,23 @@ safeHandle('save-settings', (_, data) => {
   return true;
 });
 
-safeHandle('verify-pin', (_, submittedPin) => {
-  const row = getDb().prepare("SELECT value FROM settings WHERE key = 'owner_pin'").get();
-  // Migration fallback: default pin 1111 if not set in DB yet but exists in AppContext
-  const ownerPin = row ? row.value : '1111';
-  return ownerPin === submittedPin;
+safeHandle('verify-pin', (_, { pin, role }) => {
+  const users = getUsers();
+  const user = users.find(u => u.pin === pin && (!role || u.role === role));
+  return !!user;
 });
 
-safeHandle('update-pin', (_, newPin) => {
-  getDb().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('owner_pin', newPin);
-  getDb().prepare("INSERT INTO audit_logs (action, details) VALUES (?, ?)").run('Changed Settings', 'Owner PIN updated');
-  return true;
+safeHandle('update-pin', (_, { userId, newPin }) => {
+  const result = updateUserPin(userId, newPin);
+  logAudit('Changed User PIN', `User ID ${userId} updated their security PIN`);
+  return result.changes > 0;
+});
+
+safeHandle('get-users', () => getUsers());
+
+safeHandle('save-user', (_, user) => {
+  const result = saveUser(user);
+  return result.changes > 0;
 });
 
 safeHandle('get-audit-logs', () => {

@@ -31,11 +31,12 @@ export default function Credits() {
       if (c.id !== settleModal.id) return c;
       const newPaid = (c.paid || 0) + amount;
       const newPending = Math.max(0, c.total - newPaid);
-      return { ...c, paid: newPaid, pending: newPending };
-    }).filter(c => c.pending > 0); // Remove fully settled
+      const newNote = (c.items || '') + ` (Paid ₹${amount} via ${settleMethod.toUpperCase()})`;
+      return { ...c, paid: newPaid, pending: newPending, items: newNote };
+    }).filter(c => c.pending > 0); 
 
     save(updated);
-    addToast(`₹${amount} settled for ${settleModal.customer}`, 'success');
+    addToast(`₹${amount} settled for ${settleModal.customer} via ${settleMethod.toUpperCase()}`, 'success');
     setSettleModal(null);
     setSettleAmount('');
   };

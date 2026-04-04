@@ -121,6 +121,16 @@ export function initDb() {
     )
   `).run();
 
+  // Users table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      pin TEXT NOT NULL
+    )
+  `).run();
+
   // Audit Logs table
   db.prepare(`
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -131,6 +141,15 @@ export function initDb() {
       timestamp TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+
+  // Seed default users if empty
+  const uCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  if (uCount === 0) {
+    const insertUser = db.prepare('INSERT INTO users (name, role, pin) VALUES (?, ?, ?)');
+    insertUser.run('Admin', 'Admin', '1234');
+    insertUser.run('Cashier', 'Cashier', '0000');
+    insertUser.run('Owner', 'Owner', '1111');
+  }
 
   // Seed default settings if empty
   const stCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
@@ -303,3 +322,23 @@ export function closeDb() {
     db = null;
   }
 }
+
+// User methods
+export function getUsers() {
+  return getDb().prepare('SELECT * FROM users').all();
+}
+
+export function updateUserPin(id, newPin) {
+  return getDb().prepare('UPDATE users SET pin = ? WHERE id = ?').run(newPin, id);
+}
+
+export function saveUser(user) {
+  if (user.id) {
+    return getDb().prepare('UPDATE users SET name = ?, role = ?, pin = ? WHERE id = ?')
+      .run(user.name, user.role, user.pin, user.id);
+  } else {
+    return getDb().prepare('INSERT INTO users (name, role, pin) VALUES (?, ?, ?)')
+      .run(user.name, user.role, user.pin);
+  }
+}
+
