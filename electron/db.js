@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { app } from 'electron';
 import isDev from 'electron-is-dev';
 
@@ -199,26 +200,103 @@ export function checkDatabaseIntegrity() {
 }
 
 export function repairDatabase() {
-  const currentDb = getDb();
   try {
+    const currentDb = getDb();
     // Stage 1: Non-destructive repair attempts
-    currentDb.pragma('wal_checkpoint(TRUNCATE)');
-    currentDb.prepare('REINDEX').run();
-    currentDb.prepare('VACUUM').run();
+    try {
+      currentDb.pragma('wal_checkpoint(TRUNCATE)');
+      currentDb.prepare('REINDEX').run();
+      currentDb.prepare('VACUUM').run();
+    } catch (e) {
+      // Continue to integrity check even if these fail
+    }
     
     // Check again
     const check = checkDatabaseIntegrity();
-    if (!check.success) {
-      throw new Error(`Auto-repair failed: ${check.error}`);
+    if (check.success) {
+      return { success: true, method: 'reindex_vacuum' };
     }
-    return { success: true };
+
+    // Stage 2: Close current DB and restore from best backup
+    const dbPath = getDbPath();
+    closeDb();
+
+    const backupDirs = [
+      path.join(app.getPath('userData'), 'backups'),
+      path.join(app.getPath('documents'), 'SportsZone', 'Backups'),
+    ];
+
+    let bestBackup = null;
+    let bestSalesCount = 0;
+
+    for (const dir of backupDirs) {
+      try {
+        if (!fs.existsSync(dir)) continue;
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.db'));
+        for (const f of files) {
+          const fp = path.join(dir, f);
+          try {
+            const bdb = new Database(fp, { readonly: true });
+            const ic = bdb.pragma('integrity_check');
+            if (ic[0]?.integrity_check === 'ok') {
+              let salesCount = 0;
+              try { salesCount = bdb.prepare('SELECT COUNT(*) as c FROM sales').get().c; } catch {}
+              if (salesCount >= bestSalesCount) {
+                bestSalesCount = salesCount;
+                bestBackup = fp;
+              }
+            }
+            bdb.close();
+          } catch {}
+        }
+      } catch {}
+    }
+
+    if (bestBackup) {
+      // Safety rename corrupted DB
+      const corruptedPath = dbPath + '.corrupted.' + Date.now();
+      try { fs.renameSync(dbPath + '-wal', dbPath + '-wal.corrupted.' + Date.now()); } catch {}
+      try { fs.renameSync(dbPath + '-shm', dbPath + '-shm.corrupted.' + Date.now()); } catch {}
+      try { fs.renameSync(dbPath, corruptedPath); } catch {}
+      
+      // Copy best backup as new DB
+      fs.copyFileSync(bestBackup, dbPath);
+      
+      // Re-open and verify
+      initDb();
+      const finalCheck = checkDatabaseIntegrity();
+      if (finalCheck.success) {
+        return { success: true, method: 'backup_restore', backup: path.basename(bestBackup), salesRecovered: bestSalesCount };
+      }
+    }
+
+    // Re-open DB if it was closed
+    initDb();
+    return { success: false, error: 'All repair methods failed. No healthy backup found.' };
   } catch (err) {
+    try { initDb(); } catch {}
     return { success: false, error: err.message };
   }
 }
 
+// Periodic WAL checkpoint to prevent corruption from WAL bloat
+let checkpointInterval = null;
+export function startPeriodicCheckpoint() {
+  if (checkpointInterval) return;
+  checkpointInterval = setInterval(() => {
+    try {
+      if (db) db.pragma('wal_checkpoint(PASSIVE)');
+    } catch {}
+  }, 5 * 60 * 1000); // Every 5 minutes
+}
+
 export function closeDb() {
+  if (checkpointInterval) {
+    clearInterval(checkpointInterval);
+    checkpointInterval = null;
+  }
   if (db) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
     db.close();
     db = null;
   }

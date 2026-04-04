@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
-import getDb, { initDb, checkDatabaseIntegrity, repairDatabase } from './db.js';
+import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
@@ -56,6 +56,9 @@ app.whenReady().then(() => {
 
   // Start Developer Telemetry
   try { startTelemetryLoop(); } catch (e) { logError('TelemetryInit', e); }
+
+  // Start Periodic Checkpointing
+  try { startPeriodicCheckpoint(); } catch (e) { logError('CheckpointInit', e); }
 
   // Auto-backup on startup
   try { autoBackup(); } catch (e) { logError('StartupBackup', e); }
