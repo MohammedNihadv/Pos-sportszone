@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database } from 'lucide-react';
+import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Settings() {
@@ -320,6 +320,33 @@ export default function Settings() {
               </div>
               <button disabled={isOwner} onClick={() => !isOwner && handleToggle('autoSync')} className={toggleCls(localSettings.autoSync) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}>
                 <span className={thumbCls(localSettings.autoSync)} />
+              </button>
+            </div>
+          </div>
+
+          {/* Software Update — Explicitly for Owner/Admin */}
+          <div className={`${card} p-6`}>
+            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+               <Download className="w-4 h-4 text-emerald-500" /> System Update
+            </h3>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Software Maintenance</p>
+                <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Current Version: v3.0.6</p>
+              </div>
+              <button 
+                onClick={async () => {
+                  if (window.api?.checkForUpdates) {
+                    const res = await window.api.checkForUpdates();
+                    if (res?.updateAvailable) addToast(`Update v${res.version} is available!`, 'success');
+                    else addToast('System is up to date', 'info');
+                  } else {
+                    addToast('Updater unavailable in developer mode', 'warning');
+                  }
+                }}
+                className="px-4 py-2 bg-slate-800 text-white dark:bg-blue-600 rounded-xl text-xs font-bold hover:scale-105 transition-all shadow-lg active:scale-95"
+              >
+                Check for Updates
               </button>
             </div>
           </div>

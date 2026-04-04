@@ -127,7 +127,7 @@ safeHandle('get-system-health', () => {
   });
 
   return {
-    version: app.getVersion(),
+    version: '3.0.7',
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     platform: process.platform,
@@ -221,9 +221,14 @@ safeHandle('save-settings', (_, data) => {
   return true;
 });
 
-safeHandle('verify-pin', (_, { pin, role }) => {
+safeHandle('verify-pin', async (_, data) => {
+  // Flexibility: handle both object { pin } and direct string "1234"
+  const pin = typeof data === 'object' ? data.pin : data;
+  const role = typeof data === 'object' ? data.role : null;
+  
   const users = getUsers();
-  const user = users.find(u => u.pin === pin && (!role || u.role === role));
+  // String comparison to ensure PINs like "0000" match correctly
+  const user = users.find(u => String(u.pin) === String(pin) && (!role || u.role === role));
   return !!user;
 });
 

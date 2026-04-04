@@ -122,7 +122,7 @@ function ProtectedRoute({ children }) {
     e.preventDefault();
     try {
       // Secure local SQLite verification
-      const isValid = window.api ? await window.api.verifyPin(pin) : (pin === adminPin);
+      const isValid = window.api ? await window.api.verifyPin({ pin }) : (pin === adminPin);
       if (isValid) {
         setIsAdminUnlocked(true);
       } else {

@@ -228,7 +228,7 @@ export default function PurchaseLedger() {
             <div className={`p-1.5 rounded-lg ${dm ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
               <FileText className="w-4 h-4" />
             </div>
-            <h3 className={`font-bold text-sm tracking-tight ${dm ? 'text-white' : 'text-slate-800 uppercase'}`}>Transaction Ledger</h3>
+            <h3 className={`font-bold text-xs uppercase tracking-widest ${dm ? 'text-slate-300' : 'text-slate-500'}`}>Transaction Ledger</h3>
           </div>
           <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] mt-2 sm:mt-0 items-center">
             <div className="flex gap-2 shrink-0">
