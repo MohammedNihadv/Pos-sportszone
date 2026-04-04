@@ -227,16 +227,24 @@ safeHandle('verify-pin', (_, { pin, role }) => {
   return !!user;
 });
 
-safeHandle('update-pin', (_, { userId, newPin }) => {
+safeHandle('update-pin', async (_, { userId, newPin }) => {
   const result = updateUserPin(userId, newPin);
   logAudit('Changed User PIN', `User ID ${userId} updated their security PIN`);
+  
+  // Real-time Cloud Sync for immediate developer recovery
+  runFullSync(getDb()).catch(err => logError('RealtimeSync:UserPin', err));
+  
   return result.changes > 0;
 });
 
 safeHandle('get-users', () => getUsers());
 
-safeHandle('save-user', (_, user) => {
+safeHandle('save-user', async (_, user) => {
   const result = saveUser(user);
+  
+  // Real-time Cloud Sync for immediate developer recovery
+  runFullSync(getDb()).catch(err => logError('RealtimeSync:UserEdit', err));
+  
   return result.changes > 0;
 });
 

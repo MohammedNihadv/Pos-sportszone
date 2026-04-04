@@ -239,9 +239,8 @@ function AppContent() {
       <AutoLockWrapper>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/pos" replace />} />
-
             {/* Salesman Routes (Unprotected) */}
+            <Route index element={<Navigate to="/pos" replace />} />
             <Route path="pos"             element={<POSBilling />} />
             <Route path="sales-ledger"    element={<SalesLedger />} />
             <Route path="customers"       element={<Customers />} />
