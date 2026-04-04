@@ -33,6 +33,13 @@ export function CartProvider({ children }) {
   const addToCart = useCallback((product) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === product.id);
+      const currentQty = existing ? existing.qty : 0;
+      
+      if (currentQty >= product.stock) {
+        addToast(`Cannot add more. Only ${product.stock} in stock.`, 'warning');
+        return prev;
+      }
+
       if (existing) {
         return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
       }
@@ -45,9 +52,22 @@ export function CartProvider({ children }) {
     if (qty <= 0) {
       setCart(prev => prev.filter(i => i.id !== id));
     } else {
-      setCart(prev => prev.map(i => i.id === id ? { ...i, qty } : i));
+      setCart(prev => {
+        const item = prev.find(i => i.id === id);
+        if (!item) return prev;
+        
+        // Ensure we don't exceed stock
+        const maxStock = item.stock || 999; 
+        const newQty = Math.min(qty, maxStock);
+        
+        if (qty > maxStock) {
+          addToast(`Maximum stock of ${maxStock} reached.`, 'warning');
+        }
+        
+        return prev.map(i => i.id === id ? { ...i, qty: newQty } : i);
+      });
     }
-  }, []);
+  }, [addToast]);
 
   const updateItemPrice = useCallback((id, price) => {
     setCart(prev => prev.map(i => i.id === id ? { ...i, price: parseFloat(price) || 0 } : i));

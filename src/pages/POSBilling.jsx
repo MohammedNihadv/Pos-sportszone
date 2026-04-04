@@ -136,7 +136,8 @@ function ProductCard({ product, dm, onAdd }) {
     <motion.button
       whileTap={{ scale: 0.95 }}
       onClick={handleClick}
-      className={`relative text-left p-3 rounded-xl border transition-shadow group ${dm ? 'bg-slate-900 border-slate-700 hover:border-slate-500' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'}`}
+      disabled={product.stock <= 0}
+      className={`relative text-left p-3 rounded-xl border transition-shadow group ${dm ? 'bg-slate-900 border-slate-700 hover:border-slate-500' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'} ${product.stock <= 0 ? 'opacity-60 cursor-not-allowed grayscale-[0.3]' : ''}`}
     >
       <AnimatePresence>
         {showPlus && (
@@ -158,9 +159,13 @@ function ProductCard({ product, dm, onAdd }) {
       <p className={`text-xs mt-0.5 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{product.sku}</p>
       <div className="flex items-center justify-between mt-2">
         <span className="text-sm font-bold text-blue-600">₹{product.price}</span>
-        <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${product.stock <= 10 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-          {product.stock}
-        </span>
+        {product.stock <= 0 ? (
+          <span className="text-[9px] px-1.5 py-0.5 bg-red-500 text-white rounded-md font-bold uppercase tracking-wider">No Stock</span>
+        ) : (
+          <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${product.stock <= 5 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+            {product.stock}
+          </span>
+        )}
       </div>
     </motion.button>
   );

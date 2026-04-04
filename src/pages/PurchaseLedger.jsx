@@ -224,11 +224,13 @@ export default function PurchaseLedger() {
       {/* Supplier Filter & Ledger */}
       <div className={`${card} overflow-hidden`}>
         <div className={`flex flex-col sm:flex-row items-center justify-between p-4 border-b ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
-          <div className="flex items-center gap-2">
-            <FileText className={`w-5 h-5 ${dm ? 'text-slate-400' : 'text-slate-500'}`} />
-            <h3 className={`font-semibold whitespace-nowrap ${dm ? 'text-white' : 'text-slate-800'}`}>Transaction Ledger</h3>
+          <div className="flex items-center gap-2 flex-grow">
+            <div className={`p-1.5 rounded-lg ${dm ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+              <FileText className="w-4 h-4" />
+            </div>
+            <h3 className={`font-bold text-sm tracking-tight ${dm ? 'text-white' : 'text-slate-800 uppercase'}`}>Transaction Ledger</h3>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] mt-3 sm:mt-0">
+          <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] mt-2 sm:mt-0 items-center">
             <div className="flex gap-2 shrink-0">
               {['All', ...supplierList].map(s => (
                 <button key={s} onClick={() => setSupplierFilter(s)}
@@ -241,42 +243,40 @@ export default function PurchaseLedger() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className={`border-b-2 ${dm ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
-              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Date</th>
-              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Invoice</th>
-              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</th>
-              <th className={`px-5 py-4 text-left text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Note</th>
-              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Debit (₹)</th>
-              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Credit (₹)</th>
-              <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Balance (₹)</th>
-              {!isOwner && <th className={`px-5 py-4 text-center text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>}
+              <th className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Date</th>
+              <th className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Invoice</th>
+              <th className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier</th>
+              <th className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Note</th>
+              <th className={`px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Debit (₹)</th>
+              <th className={`px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Credit (₹)</th>
+              <th className={`px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Balance (₹)</th>
+              {!isOwner && <th className={`px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-800' : 'divide-slate-100/60'}`}>
               {withBalance.map(e => {
-                const isPaid = e.note?.toLowerCase() === 'paid';
-                const isPartial = e.note?.toLowerCase() === 'partial';
                 return (
-                  <tr key={e.id} className={`transition-colors text-sm ${dm ? 'hover:bg-slate-800/50 bg-slate-900 border-b border-slate-800' : 'hover:bg-slate-50 bg-white border-b border-slate-100'}`}>
-                    <td className={`px-5 py-4 text-xs font-mono font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.date}</td>
-                    <td className="px-5 py-4 text-xs font-semibold text-blue-500">
+                  <tr key={e.id} className={`transition-colors text-xs ${dm ? 'hover:bg-slate-800/50 bg-slate-900 border-b border-slate-800' : 'hover:bg-slate-50 bg-white border-b border-slate-100'}`}>
+                    <td className={`px-4 py-2.5 text-[10px] font-mono font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.date}</td>
+                    <td className="px-4 py-2.5 text-[10px] font-semibold text-blue-500">
                       {e.inv || '—'}
                     </td>
-                    <td className={`px-5 py-4 font-bold text-sm ${dm ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <td className={`px-4 py-2.5 font-bold text-xs ${dm ? 'text-slate-200' : 'text-slate-800'}`}>
                       {e.supplier}
                     </td>
-                    <td className={`px-5 py-4 text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <td className={`px-4 py-2.5 text-[10px] ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
                       {e.note || '—'}
                     </td>
-                    <td className="px-5 py-4 text-center font-bold text-red-500">{e.debit ? `₹${e.debit}` : '—'}</td>
-                    <td className="px-5 py-4 text-center font-bold text-green-500">{e.credit ? `₹${e.credit}` : '—'}</td>
-                    <td className="px-5 py-4 text-center font-bold text-blue-600">₹{e.running}</td>
+                    <td className="px-4 py-2.5 text-center font-bold text-red-500">{e.debit ? `₹${e.debit}` : '—'}</td>
+                    <td className="px-4 py-2.5 text-center font-bold text-green-500">{e.credit ? `₹${e.credit}` : '—'}</td>
+                    <td className="px-4 py-2.5 text-center font-bold text-blue-600">₹{e.running}</td>
                     {!isOwner && (
-                      <td className="px-5 py-4 text-center">
-                        <div className="flex items-center justify-center gap-3">
+                      <td className="px-4 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <button onClick={() => setModal(e)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleDelete(e.id, e.supplier)} className="text-red-400 hover:text-red-600 transition-colors" title="Delete">
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
