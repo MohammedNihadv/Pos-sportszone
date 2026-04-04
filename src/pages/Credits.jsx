@@ -9,6 +9,7 @@ export default function Credits() {
   const [credits, setCredits] = useState([]);
   const [settleModal, setSettleModal] = useState(null); // { credit, amount }
   const [settleAmount, setSettleAmount] = useState('');
+  const [settleMethod, setSettleMethod] = useState('cash');
 
   useEffect(() => {
     try {
@@ -105,7 +106,7 @@ export default function Credits() {
 
               {!isOwner && (
                 <button
-                  onClick={() => { setSettleModal(c); setSettleAmount(String(c.pending)); }}
+                  onClick={() => { setSettleModal(c); setSettleAmount(c.pending ? c.pending.toFixed(2) : ''); setSettleMethod('cash'); }}
                   className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Clock className="w-4 h-4" />
@@ -137,6 +138,20 @@ export default function Credits() {
                 <span>₹{settleModal.pending?.toLocaleString()}</span>
               </div>
               <div>
+                <label className={`text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Payment Method</label>
+                <div className="flex gap-2 mb-3">
+                  {['cash', 'upi'].map(m => (
+                    <button key={m} onClick={() => setSettleMethod(m)} 
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2 
+                        ${settleMethod === m 
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                          : dm ? 'border-slate-700 bg-slate-800 text-slate-400 hover:border-emerald-500' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-emerald-500'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+
                 <label className={`text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Amount Received (₹)</label>
                 <input
                   autoFocus

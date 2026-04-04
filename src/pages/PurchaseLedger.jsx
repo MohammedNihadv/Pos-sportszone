@@ -208,7 +208,7 @@ export default function PurchaseLedger() {
         <div className={`flex flex-col sm:flex-row items-center justify-between p-4 border-b ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
           <div className="flex items-center gap-2">
             <FileText className={`w-5 h-5 ${dm ? 'text-slate-400' : 'text-slate-500'}`} />
-            <h3 className={`font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>Transaction Ledger</h3>
+            <h3 className={`font-semibold whitespace-nowrap ${dm ? 'text-white' : 'text-slate-800'}`}>Transaction Ledger</h3>
           </div>
           <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] mt-3 sm:mt-0">
             <div className="flex gap-2 shrink-0">

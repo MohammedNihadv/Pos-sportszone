@@ -1,0 +1,174 @@
+[
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\Pos-developer-dashboard\\src\\App.jsx",
+    "errors": [
+      "Error: Cannot access variable before it is declared\n\n`fetchTelemetry` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.\n\n  24 |   useEffect(() => {\n  25 |     if (isAuthenticated) {\n> 26 |       fetchTelemetry();\n     |       ^^^^^^^^^^^^^^ `fetchTelemetry` accessed before it is declared\n  27 |       const devicesSub = supabase.channel('custom-all-channel')\n  28 |         .on('postgres_changes', { event: '*', schema: 'public', table: 'device_telemetry' }, payload => {\n  29 |           fetchTelemetry();\n\n  53 |   }\n  54 |\n> 55 |   const fetchTelemetry = async () => {\n     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 56 |     setLoading(true);\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 57 |     try {\n     …\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 74 |     setLoading(false);\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 75 |   };\n     | ^^^^^ `fetchTelemetry` is declared here\n  76 |\n  77 |   const triggerForceAction = async (deviceId, action) => {\n  78 |     if (!window.confirm(`CRITICAL: Are you sure you want to trigger '${action.toUpperCase()}' on device ${deviceId}?`)) return;",
+      "'payload' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\backup.js",
+    "errors": [
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "Empty block statement."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\db.js",
+    "errors": [
+      "'process' is not defined.",
+      "'e' is defined but never used.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "'e' is defined but never used.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement.",
+      "Empty block statement."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\logger.js",
+    "errors": [
+      "'process' is not defined.",
+      "Empty block statement.",
+      "Empty block statement."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\main.js",
+    "errors": [
+      "'dialog' is defined but never used. Allowed unused vars must match /^[A-Z_]/u.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "Empty block statement.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'process' is not defined.",
+      "'e' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\preload.js",
+    "errors": [
+      "'require' is not defined."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\telemetry.js",
+    "errors": [
+      "'getDeviceInfo' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\electron\\updater.js",
+    "errors": [
+      "'mainWindow' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\App.jsx",
+    "errors": [
+      "'errorInfo' is defined but never used.",
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  110 |   useEffect(() => {\n  111 |     if (!isAdminUnlocked) {\n> 112 |       setPin('');\n      |       ^^^^^^ Avoid calling setState() directly within an effect\n  113 |       setShowPin(false);\n  114 |       setError(false);\n  115 |     }",
+      "'err' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\components\\CheckoutModal.jsx",
+    "errors": [
+      "Error: Cannot access variable before it is declared\n\n`selectMethod` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.\n\n  57 |     const handler = (e) => {\n  58 |       if (step === 'method') {\n> 59 |         if (e.key === 'c' || e.key === 'C') { e.preventDefault(); selectMethod('cash'); }\n     |                                                                   ^^^^^^^^^^^^ `selectMethod` accessed before it is declared\n  60 |         if (e.key === 'u' || e.key === 'U') { e.preventDefault(); selectMethod('upi'); }\n  61 |         if (e.key === 'p' || e.key === 'P') { e.preventDefault(); selectMethod('credit'); }\n  62 |         if (e.key === 'Escape') { e.preventDefault(); onClose(); }\n\n  82 |   });\n  83 |\n> 84 |   const selectMethod = (method) => {\n     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 85 |     playSound('tap');\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 86 |     setCurrentMethod(method);\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 87 |     if (method === 'credit') {\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 88 |       setStep('credit'); // Go to Pay Later screen\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 89 |     } else {\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 90 |       setAmountInput(method === 'cash' ? '' : String(remaining));\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 91 |       setStep('amount');\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 92 |     }\n     | ^^^^^^^^^^^^^^^^^^^^^\n> 93 |   };\n     | ^^^^^ `selectMethod` is declared here\n  94 |\n  95 |   const addPayment = (method, amount) => {\n  96 |     const newPayments = [...payments, { method, amount: parseFloat(amount) || 0 }];",
+      "Error: Cannot access variable before it is declared\n\n`confirmAmount` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.\n\n  63 |       }\n  64 |       if (step === 'amount') {\n> 65 |         if (e.key === 'Enter') { e.preventDefault(); confirmAmount(); }\n     |                                                      ^^^^^^^^^^^^^ `confirmAmount` accessed before it is declared\n  66 |         if (e.key === 'Escape') { e.preventDefault(); setStep('method'); }\n  67 |       }\n  68 |       if (step === 'change') {\n\n  112 |   };\n  113 |\n> 114 |   const confirmAmount = () => {\n      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 115 |     playSound('click');\n      | ^^^^^^^^^^^^^^^^^^^^^^^\n> 116 |     const amt = parseFloat(amountInput);\n      | ^^^^^^^^^^^^^^^^^^^^^^^\n> 117 |     if (!amt || amt <= 0) return;\n      | ^^^^^^^^^^^^^^^^^^^^^^^\n> 118 |     addPayment(currentMethod || 'cash', amt);\n      | ^^^^^^^^^^^^^^^^^^^^^^^\n> 119 |   };\n      | ^^^^^ `confirmAmount` is declared here\n  120 |\n  121 |   const payExact = () => {\n  122 |     addPayment('cash', remaining);",
+      "Error: Cannot access variable before it is declared\n\n`finalize` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.\n\n  69 |         if (e.key === 'c' || e.key === 'C') { e.preventDefault(); setChangeReturnMethod('cash'); }\n  70 |         if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setChangeReturnMethod('store-upi'); }\n> 71 |         if (e.key === 'Enter' && changeReturnMethod) { e.preventDefault(); finalize(); }\n     |                                                                            ^^^^^^^^ `finalize` accessed before it is declared\n  72 |       }\n  73 |       if (step === 'receipt') {\n  74 |         if (e.key === 'Escape') { e.preventDefault(); onClose(); }\n\n  130 |   };\n  131 |\n> 132 |   const finalize = useCallback(() => {\n      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 133 |     if (isProcessing) return;\n      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 134 |     setIsProcessing(true);\n      …\n      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 151 |     onComplete(salePayload);\n      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 152 |   }, [total, cart, payments, totalPaid, overpaid, changeReturnMethod, onComplete, isProcessing]);\n      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `finalize` is declared here\n  153 |\n  154 |   const resetAll = () => {\n  155 |     setPayments([]);",
+      "React Hook useCallback has a missing dependency: 'discountAmount'. Either include it or remove the dependency array.",
+      "'_' is defined but never used.",
+      "Empty block statement.",
+      "React Hook useCallback has a missing dependency: 'discountAmount'. Either include it or remove the dependency array.",
+      "'Icon' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\components\\ReceiptDownload.jsx",
+    "errors": [
+      "Error: Cannot call impure function during render\n\n`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).\n\n  42 |   const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });\n  43 |   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });\n> 44 |   const invoiceNo = `INV-${Date.now().toString().slice(-6)}`;\n     |                            ^^^^^^^^^^ Cannot call impure function\n  45 |\n  46 |   return (\n  47 |     <div>"
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\components\\UpdateNotifier.jsx",
+    "errors": [
+      "'data' is defined but never used."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\context\\AppContext.jsx",
+    "errors": [
+      "React Hook useMemo has a missing dependency: 'setCustomers'. Either include it or remove the dependency array.",
+      "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\context\\AuthContext.jsx",
+    "errors": [
+      "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\context\\CartContext.jsx",
+    "errors": [
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  20 |     const recoveredCart = recoverSession();\n  21 |     if (recoveredCart && recoveredCart.length > 0) {\n> 22 |       setCart(recoveredCart);\n     |       ^^^^^^^ Avoid calling setState() directly within an effect\n  23 |       addToast(`Recovered ${recoveredCart.length} item(s) from previous session`, 'success');\n  24 |     }\n  25 |     setRecoveryOffered(true);",
+      "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\hooks\\useAutoLock.js",
+    "errors": [
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  57 |     if (isLocked || !autoLockEnabled || !currentUser || isOwner) {\n  58 |       clearAllTimers();\n> 59 |       setIsWarning(false);\n     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect\n  60 |       return;\n  61 |     }\n  62 |"
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\pages\\Accounting.jsx",
+    "errors": [
+      "'useEffect' is defined but never used. Allowed unused vars must match /^[A-Z_]/u."
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\pages\\ActivityLogs.jsx",
+    "errors": [
+      "Error: Cannot access variable before it is declared\n\n`fetchLogs` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.\n\n   9 |\n  10 |   useEffect(() => {\n> 11 |     fetchLogs();\n     |     ^^^^^^^^^ `fetchLogs` accessed before it is declared\n  12 |   }, []);\n  13 |\n  14 |   const fetchLogs = async () => {\n\n  12 |   }, []);\n  13 |\n> 14 |   const fetchLogs = async () => {\n     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 15 |     if (window.api && window.api.getAuditLogs) {\n     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 16 |       try {\n     …\n     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 23 |     setIsLoading(false);\n     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n> 24 |   };\n     | ^^^^^ `fetchLogs` is declared here\n  25 |\n  26 |   const getIconForAction = (action) => {\n  27 |     if (action.includes('Delete')) return <Trash2 className=\"w-4 h-4 text-red-500\" />;"
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\pages\\AuthScreen.jsx",
+    "errors": [
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  10 |\n  11 |   useEffect(() => {\n> 12 |     if (lockedUser) setSelectedUser(lockedUser);\n     |                     ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect\n  13 |   }, [lockedUser]);\n  14 |\n  15 |   // ─── Physical Keyboard Support ───",
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  65 |       } else {\n  66 |         playSound('error');\n> 67 |         setError(true);\n     |         ^^^^^^^^ Avoid calling setState() directly within an effect\n  68 |         setTimeout(() => setPin(''), 500);\n  69 |       }\n  70 |     }"
+    ]
+  },
+  {
+    "file": "C:\\Users\\mhdni\\Desktop\\Pos-system\\src\\pages\\Credits.jsx",
+    "errors": [
+      "Error: Calling setState synchronously within an effect can trigger cascading renders\n\nEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:\n* Update external systems with the latest state from React.\n* Subscribe for updates from some external system, calling setState in a callback function when external state changes.\n\nCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).\n\n  14 |     try {\n  15 |       const stored = JSON.parse(localStorage.getItem('sz_credits') || '[]');\n> 16 |       setCredits(stored);\n     |       ^^^^^^^^^^ Avoid calling setState() directly within an effect\n  17 |     } catch { setCredits([]); }\n  18 |   }, []);\n  19 |"
+    ]
+  }
+]

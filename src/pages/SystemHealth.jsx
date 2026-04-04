@@ -352,7 +352,6 @@ export default function SystemHealth() {
       </div>
 
       {/* Software Update Section */}
-      {!isOwner && (
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-2">
@@ -400,7 +399,6 @@ export default function SystemHealth() {
           </button>
         </div>
       </div>
-      )}
 
       {/* Error Logs */}
       {!isOwner && (

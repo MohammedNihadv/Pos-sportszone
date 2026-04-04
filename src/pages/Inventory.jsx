@@ -141,7 +141,7 @@ export default function Inventory() {
   };
 
   const totalValue = products.reduce((s, p) => s + (p.stock * p.cost), 0);
-  const lowStockCount = products.filter(p => p.stock <= 5).length;
+  const lowStockCount = products.filter(p => p.stock < 5).length;
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-4 py-3 text-left font-medium text-xs uppercase tracking-wide ${dm ? 'text-slate-400' : 'text-slate-500'}`;
@@ -173,7 +173,7 @@ export default function Inventory() {
         </div>
         <div className={`rounded-2xl border shadow-sm p-4 ${lowStockCount > 0 ? (dm ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200') : (dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100')}`}>
           <p className={`text-xs font-medium flex items-center gap-1.5 ${lowStockCount > 0 ? 'text-red-600' : (dm ? 'text-slate-400' : 'text-slate-500')}`}>
-            {lowStockCount > 0 && <AlertTriangle className="w-3.5 h-3.5" />} Low Stock (≤5)
+            {lowStockCount > 0 && <AlertTriangle className="w-3.5 h-3.5" />} Low Stock (&lt;5)
           </p>
           <p className={`text-3xl font-bold mt-1 ${lowStockCount > 0 ? 'text-red-600' : (dm ? 'text-white' : 'text-slate-800')}`}>{lowStockCount}</p>
         </div>
@@ -219,8 +219,8 @@ export default function Inventory() {
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md font-bold
-                        ${p.stock <= 2 ? 'bg-red-100 text-red-700' : p.stock <= 5 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                        {p.stock <= 5 && <AlertTriangle className="w-3 h-3" />}
+                        ${p.stock < 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        {p.stock < 5 && <AlertTriangle className="w-3 h-3" />}
                         {p.stock}
                       </span>
                     </td>
