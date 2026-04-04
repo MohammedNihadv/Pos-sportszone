@@ -177,7 +177,7 @@ export function AppProvider({ children }) {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('sz_current_user'));
-      return cached?.role === 'Owner' || cached?.role === 'Admin';
+      return cached?.role === 'Admin'; // Admin is unlocked, Owner is now just isOwner
     } catch { return false; }
   });
   
@@ -205,12 +205,14 @@ export function AppProvider({ children }) {
     setCurrentUserState(user);
     if (user) {
       localStorage.setItem('sz_current_user', JSON.stringify(user));
-      setIsAdminUnlocked(user.role === 'Owner' || user.role === 'Admin');
+      setIsAdminUnlocked(user.role === 'Admin'); // Only Admin gets unlocked powers
     } else {
       localStorage.removeItem('sz_current_user');
       setIsAdminUnlocked(false);
     }
   }, []);
+
+  const isOwner = currentUser?.role === 'Owner';
 
   const setLogo = useCallback((newLogo) => { setLogoState(newLogo); localStorage.setItem('sz_logo', newLogo); }, []);
   const updateAdminPin = useCallback((newPin) => { 
@@ -252,7 +254,7 @@ export function AppProvider({ children }) {
     categories, setCategories, expenseCategories, setExpenseCategories,
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits, customers, setCustomers,
-    appSettings, saveAppSettings,
+    appSettings, saveAppSettings, isOwner,
     refreshProducts, refreshSales, loadData
   }), [
     darkMode, sidebarCollapsed, toasts, syncStatus, logo,
@@ -260,7 +262,7 @@ export function AppProvider({ children }) {
     soundEnabled, autoLockEnabled, autoLockTimeout,
     products, suppliers, categories, expenseCategories,
     sales, expenses, purchases, credits, customers,
-    appSettings, saveAppSettings,
+    appSettings, saveAppSettings, isOwner,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
     refreshProducts, refreshSales, loadData

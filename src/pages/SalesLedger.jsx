@@ -158,7 +158,7 @@ function SaleModal({ sale, onClose, onSave, dm }) {
 }
 
 export default function SalesLedger() {
-  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales } = useApp();
+  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner } = useApp();
   const dm = darkMode;
   // Map live POS sales to ledger format + allow manual entries
   const [manualSales, setManualSales] = useState([]);
@@ -259,11 +259,15 @@ export default function SalesLedger() {
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Sales Ledger</h2>
-          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>All sale entries — click ✏️ to edit any row</p>
+          <p className={`text-sm mt-0.5 flex items-center gap-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+             All sale entries — click <Edit2 className="w-3.5 h-3.5 mx-0.5" /> to edit any row
+          </p>
         </div>
-        <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
-          <Plus className="w-4 h-4" /> Add Entry
-        </button>
+        {!isOwner && (
+          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
+            <Plus className="w-4 h-4" /> Add Entry
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -310,7 +314,7 @@ export default function SalesLedger() {
               <th className={th + ' text-right'}>Selling (₹)</th>
               <th className={th + ' text-right'}>Profit (₹)</th>
               <th className={th + ' text-right'}>Margin</th>
-              <th className={th + ' text-center'}>Actions</th>
+              {!isOwner && <th className={th + ' text-center'}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {filtered.map(s => {
@@ -333,16 +337,18 @@ export default function SalesLedger() {
                     <td className="px-4 py-3.5 text-right">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
                     </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => setModal(s)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(s.id, s.inv)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    {!isOwner && (
+                      <td className="px-4 py-3.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => setModal(s)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDelete(s.id, s.inv)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

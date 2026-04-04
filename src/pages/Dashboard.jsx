@@ -1,17 +1,24 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, Sector
 } from 'recharts';
-import { IndianRupee, TrendingUp, TrendingDown, AlertCircle, Receipt, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { IndianRupee, TrendingUp, TrendingDown, AlertCircle, Receipt, ArrowUpRight, ArrowDownRight, PackageX, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 
 // --- Static dummy data removed for live database integration ---
 
 
 export default function Dashboard() {
-  const { darkMode, products, sales, expenses, purchases } = useApp();
+  const { darkMode, products, sales, expenses, purchases, currentUser } = useApp();
   const dm = darkMode;
+  const navigate = useNavigate();
+
+  // Time-aware greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySales = useMemo(() => 
@@ -37,9 +44,44 @@ export default function Dashboard() {
       const d = new Date();
       d.setDate(d.getDate() - (6 - offset));
       const dayStr = d.toISOString().split('T')[0];
-      const daySales = sales.filter(s => (s.date || s.created_at || '').startsWith(dayStr)).reduce((sum, s) => sum + (s.total || 0), 0);
-      return { day: days[d.getDay()], sales: daySales, profit: daySales * 0.25 }; // Mock profit ratio
+      const daySalesArr = sales.filter(s => (s.date || s.created_at || '').startsWith(dayStr));
+      const daySales = daySalesArr.reduce((sum, s) => sum + (s.total || 0), 0);
+      const dayCost = daySalesArr.reduce((sum, s) => {
+        return sum + (s.items || []).reduce((itemSum, item) => itemSum + ((item.cost || 0) * item.qty), 0);
+      }, 0);
+      return { day: days[d.getDay()], sales: daySales, profit: daySales - dayCost }; 
     });
+  }, [sales]);
+
+  // Inventory Health
+  const { lowStock, outOfStock } = useMemo(() => {
+    let low = 0, out = 0;
+    (products || []).forEach(p => {
+      if (p.stock <= 0) out++;
+      else if (p.stock <= 10) low++;
+    });
+    return { lowStock: low, outOfStock: out };
+  }, [products]);
+
+  // Payment Liquidity (Cash vs UPI)
+  const paymentSplit = useMemo(() => {
+    let cash = 0, online = 0;
+    (sales || []).forEach(s => {
+      if (s.paymentMethod === 'Cash') cash += s.total || 0;
+      else online += s.total || 0;
+    });
+    return [
+      { name: 'Cash', value: cash, color: '#3b82f6' },
+      { name: 'Online / UPI', value: online, color: '#8b5cf6' }
+    ].filter(d => d.value > 0);
+  }, [sales]);
+
+  // Top VIP Customers
+  const topCustomers = useMemo(() => {
+    // Assuming walk-in for now, but grouping by a hypothetical customer ID if available
+    // For now we map true recent high-value sales as "VIP Transactions" or basic grouping
+    // Since we don't have a separate 'customers' array deep linked yet, we'll aggregate by payment source or just show top invoices.
+    return sales.slice().sort((a,b) => b.total - a.total).slice(0, 5);
   }, [sales]);
 
   const topProducts = useMemo(() => {
@@ -77,10 +119,35 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Page Heading */}
-      <div>
-        <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Dashboard</h2>
-        <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Welcome back! Here's what's happening today.</p>
+      {/* Premium Executive Welcome */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-2">
+        <div>
+          <h2 className={`text-2xl font-black tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>
+            {greeting}, {currentUser?.name || currentUser?.role || 'Admin'}
+          </h2>
+          <p className={`text-sm mt-1 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+            Here is your business overview for {dateStr}.
+          </p>
+        </div>
       </div>
+
+      {/* Inventory Health Alert */}
+      {(lowStock > 0 || outOfStock > 0) && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-fade-in ${dm ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-100'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${dm ? 'bg-red-900/50 text-red-400' : 'bg-red-100 text-red-600'}`}>
+              <PackageX className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className={`font-bold text-sm ${dm ? 'text-red-400' : 'text-red-800'}`}>Inventory Alert</h4>
+              <p className={`text-xs mt-0.5 ${dm ? 'text-red-300/70' : 'text-red-600'}`}>
+                You have {outOfStock} items out of stock and {lowStock} items running low.
+              </p>
+            </div>
+          </div>
+          <button onClick={() => navigate('/inventory')} className={`text-xs font-bold px-4 py-2 rounded-lg transition-colors ${dm ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'}`}>Review Inventory</button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -122,18 +189,28 @@ export default function Dashboard() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={dm ? '#334155' : '#f1f5f9'} />
+            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+              <defs>
+                <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={dm ? '#334155' : '#f1f5f9'} vertical={false} />
               <XAxis dataKey="day" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, maxSalesLine]} tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: dm ? '#1e293b' : '#fff', border: '1px solid ' + (dm ? '#334155' : '#e2e8f0'), borderRadius: 10, color: dm ? '#f1f5f9' : '#1e293b' }}
+                contentStyle={{ background: dm ? '#1e293b' : '#fff', border: '1px solid ' + (dm ? '#334155' : '#e2e8f0'), borderRadius: 12, color: dm ? '#f1f5f9' : '#1e293b', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 formatter={(value) => [`₹${value.toLocaleString()}`, '']}
               />
-              <Legend />
-              <Line type="monotone" dataKey="sales" name="Sales" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4, fill: '#3b82f6' }} activeDot={{ r: 6 }} animationDuration={800} />
-              <Line type="monotone" dataKey="profit" name="Profit" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} animationDuration={800} />
-            </LineChart>
+              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+              <Area type="monotone" dataKey="sales" name="Revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={800} />
+              <Area type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={800} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
@@ -156,7 +233,81 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Sales */}
+      {/* BI Widgets Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Payment Split Donut */}
+        <div className={`${card} p-5 flex flex-col`}>
+          <div className="mb-2">
+            <h3 className={`font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>Liquidity Origin</h3>
+            <p className={`text-xs mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Cash vs. Online revenue split</p>
+          </div>
+          {paymentSplit.length > 0 ? (
+            <div className="h-[200px] flex items-center justify-center relative">
+               <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                   <Pie data={paymentSplit} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" animationDuration={800} stroke="none">
+                     {paymentSplit.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                   </Pie>
+                   <Tooltip 
+                      contentStyle={{ background: dm ? '#1e293b' : '#fff', border: 'none', borderRadius: 8, color: dm ? '#f1f5f9' : '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(v) => `₹${v.toLocaleString()}`}
+                   />
+                 </PieChart>
+               </ResponsiveContainer>
+               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className={`text-sm font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
+                  <span className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
+                    ₹{paymentSplit.reduce((s,o)=>s+o.value,0).toLocaleString()}
+                  </span>
+               </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-sm text-slate-400">No payment data yet</div>
+          )}
+          <div className="flex justify-center gap-6 mt-2">
+            {paymentSplit.map(p => (
+              <div key={p.name} className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}></span>
+                <span className={`text-xs font-medium ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{p.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top VIP Sales */}
+        <div className={`${card} p-5 flex flex-col`}>
+          <div className="mb-4 flex justify-between items-center">
+            <div>
+              <h3 className={`font-semibold flex items-center gap-2 ${dm ? 'text-white' : 'text-slate-800'}`}>
+                <Users className="w-4 h-4 text-emerald-500" /> High-Value Transactions
+              </h3>
+              <p className={`text-xs mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Largest invoices recorded</p>
+            </div>
+          </div>
+          <div className={`flex-1 overflow-y-auto space-y-2 pr-2 ${dm ? 'scrollbar-dark' : 'scrollbar-light'}`}>
+            {topCustomers.map(sale => (
+              <div key={sale.id} className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${dm ? 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800' : 'bg-slate-50/50 border-slate-100 hover:bg-slate-50'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${dm ? 'bg-slate-700 text-slate-300' : 'bg-white text-slate-600 border border-slate-200'}`}>
+                    {sale.paymentMethod === 'Cash' ? '💵' : '💳'}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${dm ? 'text-slate-200' : 'text-slate-800'}`}>INV-{sale.id}</p>
+                    <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{sale.items.length} items • {sale.paymentMethod}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-emerald-600">₹{sale.total.toLocaleString()}</p>
+                  <p className={`text-[10px] uppercase font-bold mt-0.5 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{sale.date?.split(' ')[0]}</p>
+                </div>
+              </div>
+            ))}
+            {topCustomers.length === 0 && <p className="text-sm text-slate-400 text-center py-8">No high-value sales yet</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Sales Ledger */}
       <div className={`${card} overflow-hidden`}>
         <div className="px-5 py-4 border-b flex justify-between items-center">
           <div>
@@ -177,19 +328,19 @@ export default function Dashboard() {
                 <th className="px-5 py-3 text-right">Time</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
+            <tbody className={`divide-y ${dm ? 'divide-slate-800' : 'divide-slate-50'}`}>
               {sales.slice(0, 5).map(s => (
-                <tr key={s.id} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
-                  <td className="px-5 py-3.5 font-semibold text-blue-600">INV-{s.id}</td>
-                  <td className={`px-5 py-3.5 ${dm ? 'text-slate-200' : 'text-slate-800'}`}>Walk-in Customer</td>
-                  <td className={`px-5 py-3.5 text-right ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.items.length}</td>
-                  <td className="px-5 py-3.5 text-right font-bold text-green-600">₹{s.total.toLocaleString()}</td>
-                  <td className="px-5 py-3.5 text-center">
-                    <span className={`text-xs px-2 py-1 rounded-full font-semibold bg-green-100 text-green-700`}>
-                      ✓ Paid
+                <tr key={s.id} className={`transition-colors text-sm ${dm ? 'hover:bg-slate-800/50 bg-slate-900' : 'hover:bg-blue-50/50 bg-white'}`}>
+                  <td className="px-5 py-4 font-bold text-blue-600">INV-{s.id}</td>
+                  <td className={`px-5 py-4 font-medium ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Walk-in Customer</td>
+                  <td className={`px-5 py-4 text-right font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.items.length}</td>
+                  <td className={`px-5 py-4 text-right font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{s.total.toLocaleString()}</td>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md uppercase font-bold tracking-wider ${s.paymentMethod === 'Cash' ? (dm ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : (dm ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700')}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current"></span> Paid {s.paymentMethod}
                     </span>
                   </td>
-                  <td className={`px-5 py-3.5 text-right text-xs ${dm ? 'text-slate-400' : 'text-slate-400'}`}>{s.date?.includes(' ') ? s.date.split(' ')[1] : 'Today'}</td>
+                  <td className={`px-5 py-4 text-right font-medium text-xs ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{s.date?.includes(' ') ? s.date.split(' ')[1] : 'Today'}</td>
                 </tr>
               ))}
             </tbody>

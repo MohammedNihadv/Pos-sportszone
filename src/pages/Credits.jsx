@@ -3,7 +3,7 @@ import { Clock, CheckCircle, Trash2, AlertCircle, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Credits() {
-  const { darkMode, addToast } = useApp();
+  const { darkMode, addToast, isOwner } = useApp();
   const dm = darkMode;
 
   const [credits, setCredits] = useState([]);
@@ -79,9 +79,11 @@ export default function Credits() {
                   <p className={`font-bold text-base ${dm ? 'text-white' : 'text-slate-800'}`}>{c.customer}</p>
                   <p className={`text-xs mt-0.5 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{c.date}</p>
                 </div>
-                <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {!isOwner && (
+                  <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               <p className={`text-xs truncate ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{c.items}</p>
@@ -101,13 +103,15 @@ export default function Credits() {
                 </div>
               </div>
 
-              <button
-                onClick={() => { setSettleModal(c); setSettleAmount(String(c.pending)); }}
-                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
-              >
-                <Clock className="w-4 h-4" />
-                Record Payment
-              </button>
+              {!isOwner && (
+                <button
+                  onClick={() => { setSettleModal(c); setSettleAmount(String(c.pending)); }}
+                  className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <Clock className="w-4 h-4" />
+                  Record Payment
+                </button>
+              )}
             </div>
           ))}
         </div>

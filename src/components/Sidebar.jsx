@@ -79,6 +79,10 @@ export default function Sidebar() {
 
   const visibleSections = NAV_SECTIONS.filter(section => {
     if (isAdminUnlocked) return true;
+    if (currentUser?.role === 'Owner') {
+      const allowedOwnerSections = ['Main', 'Stock & Sales', 'Money', 'People', 'System'];
+      return allowedOwnerSections.includes(section.label);
+    }
     if (section.label === 'Main' || section.label === 'People' || section.label === 'Stock & Sales') {
       // In Salesman mode, only show specific items within these sections
       return true;
@@ -86,6 +90,11 @@ export default function Sidebar() {
     return false;
   }).map(section => {
     if (isAdminUnlocked) return section;
+    if (currentUser?.role === 'Owner') {
+      const excludedOwnerItems = ['POS Billing', 'Purchases']; // Keep Settings and Roadmap
+      const ownerItems = section.items.filter(item => !excludedOwnerItems.includes(item.name));
+      return ownerItems.length > 0 ? { ...section, items: ownerItems } : null;
+    }
     // Salesman mode: filter individual items
     const salesmanItems = section.items.filter(item => 
       ['POS Billing', 'Sales Ledger', 'Customers', 'Credits'].includes(item.name)

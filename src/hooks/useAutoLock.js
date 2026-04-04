@@ -23,7 +23,7 @@ export function useAutoLock() {
     setIsWarning(false);
     setTimeLeft(warningSeconds);
 
-    if (isLocked || !autoLockEnabled || !currentUser) return; // Don't track if locked or disabled or no user
+    if (isLocked || !autoLockEnabled || !currentUser || currentUser.role !== 'Cashier') return; // Only track for Cashier
 
     const msUntilWarning = (autoLockTimeout * 60 - warningSeconds) * 1000;
     
@@ -53,8 +53,8 @@ export function useAutoLock() {
   }, [autoLockTimeout, warningSeconds, isLocked, autoLockEnabled, setIsLocked, clearAllTimers, currentUser]);
 
   useEffect(() => {
-    // Only track if unlocked and enabled and has user
-    if (isLocked || !autoLockEnabled || !currentUser) {
+    // Only track if unlocked and enabled, has user, and is Cashier
+    if (isLocked || !autoLockEnabled || !currentUser || currentUser.role !== 'Cashier') {
       clearAllTimers();
       setIsWarning(false);
       return;

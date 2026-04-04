@@ -52,34 +52,6 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     }
   }, [step]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handler = (e) => {
-      if (step === 'method') {
-        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); selectMethod('cash'); }
-        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); selectMethod('upi'); }
-        if (e.key === 'p' || e.key === 'P') { e.preventDefault(); selectMethod('credit'); }
-        if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-      }
-      if (step === 'amount') {
-        if (e.key === 'Enter') { e.preventDefault(); confirmAmount(); }
-        if (e.key === 'Escape') { e.preventDefault(); setStep('method'); }
-      }
-      if (step === 'change') {
-        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); setChangeReturnMethod('cash'); }
-        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setChangeReturnMethod('store-upi'); }
-        if (e.key === 'Enter' && changeReturnMethod) { e.preventDefault(); finalize(); }
-      }
-      if (step === 'receipt') {
-        if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-      }
-      if (step === 'success') {
-        if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); onClose(); }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  });
 
   const selectMethod = (method) => {
     playSound('tap');
@@ -158,6 +130,35 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     setChangeReturnMethod(null);
     setStep('method');
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if (step === 'method') {
+        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); selectMethod('cash'); }
+        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); selectMethod('upi'); }
+        if (e.key === 'p' || e.key === 'P') { e.preventDefault(); selectMethod('credit'); }
+        if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      }
+      if (step === 'amount') {
+        if (e.key === 'Enter') { e.preventDefault(); confirmAmount(); }
+        if (e.key === 'Escape') { e.preventDefault(); setStep('method'); }
+      }
+      if (step === 'change') {
+        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); setChangeReturnMethod('cash'); }
+        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setChangeReturnMethod('store-upi'); }
+        if (e.key === 'Enter' && changeReturnMethod) { e.preventDefault(); finalize(); }
+      }
+      if (step === 'receipt') {
+        if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      }
+      if (step === 'success') {
+        if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); onClose(); }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
 
   const methodLabel = (m) => {
     if (m === 'cash') return 'Cash';

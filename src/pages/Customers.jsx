@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
 export default function Customers() {
-  const { customers, setCustomers, darkMode, addToast } = useApp();
+  const { customers, setCustomers, darkMode, addToast, isOwner } = useApp();
   const dm = darkMode;
   const [search, setSearch] = useState('');
   
@@ -79,9 +79,11 @@ export default function Customers() {
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Customers</h2>
           <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Customer database and purchase history</p>
         </div>
-        <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
-          <Plus className="w-4 h-4" /> Add Customer
-        </button>
+        {!isOwner && (
+          <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
+            <Plus className="w-4 h-4" /> Add Customer
+          </button>
+        )}
       </div>
 
       {/* Summary */}
@@ -113,7 +115,7 @@ export default function Customers() {
               <th className={th + ' text-right'}>Orders</th>
               <th className={th + ' text-right'}>Total Spent</th>
               <th className={th}>Last Order</th>
-              <th className={th + ' text-right'}>Actions</th>
+              {!isOwner && <th className={th + ' text-right'}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {filtered.length === 0 ? (
@@ -141,16 +143,18 @@ export default function Customers() {
                   <td className={`px-5 py-3.5 text-right font-semibold ${dm ? 'text-slate-300' : 'text-slate-700'}`}>{c.orders || 0}</td>
                   <td className="px-5 py-3.5 text-right font-bold text-green-600">₹{(c.total || 0).toLocaleString()}</td>
                   <td className={`px-5 py-3.5 text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{c.lastOrder || '-'}</td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openModal(c)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(c.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+                  {!isOwner && (
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => openModal(c)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

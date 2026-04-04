@@ -12,7 +12,8 @@ export default function Settings() {
     appSettings, saveAppSettings,
     categories, setCategories,
     expenseCategories, setExpenseCategories,
-    suppliers, setSuppliers
+    suppliers, setSuppliers,
+    isOwner
   } = ctx;
 
   const [localSettings, setLocalSettings] = useState(appSettings);
@@ -154,25 +155,28 @@ export default function Settings() {
                 <div className="flex-1 w-full sm:w-auto space-y-2">
                   <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Store Name</p>
                   <input
-                    className={`w-full px-3 py-2 rounded-lg text-base font-bold border-2 outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'}`}
+                    className={`w-full px-3 py-2 rounded-lg text-base font-bold border-2 outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'} ${isOwner ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500'}`}
                     value={localSettings.businessName}
-                    onChange={e => setLocalSettings({...localSettings, businessName: e.target.value})}
+                    onChange={e => !isOwner && setLocalSettings({...localSettings, businessName: e.target.value})}
                     placeholder="e.g. Sports Zone"
+                    readOnly={isOwner}
                   />
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
-                    <Upload className="w-3.5 h-3.5" /> Change Logo
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                  </label>
+                  {!isOwner && (
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
+                      <Upload className="w-3.5 h-3.5" /> Change Logo
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                    </label>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className={labelCls}>GST Identification</label><input className={inputCls} value={localSettings.businessGstin} onChange={e => setLocalSettings({...localSettings, businessGstin: e.target.value})} /></div>
-                  <div><label className={labelCls}>Official Phone</label><input className={inputCls} value={localSettings.businessPhone} onChange={e => setLocalSettings({...localSettings, businessPhone: e.target.value})} /></div>
+                  <div><label className={labelCls}>GST Identification</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessGstin} onChange={e => !isOwner && setLocalSettings({...localSettings, businessGstin: e.target.value})} readOnly={isOwner} /></div>
+                  <div><label className={labelCls}>Official Phone</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessPhone} onChange={e => !isOwner && setLocalSettings({...localSettings, businessPhone: e.target.value})} readOnly={isOwner} /></div>
                 </div>
-                <div><label className={labelCls}>Email Address</label><input className={inputCls} value={localSettings.businessEmail} onChange={e => setLocalSettings({...localSettings, businessEmail: e.target.value})} /></div>
-                <div><label className={labelCls}>Physical Address</label><textarea className={inputCls + ' resize-none'} rows={2} value={localSettings.businessAddress} onChange={e => setLocalSettings({...localSettings, businessAddress: e.target.value})} /></div>
+                <div><label className={labelCls}>Email Address</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessEmail} onChange={e => !isOwner && setLocalSettings({...localSettings, businessEmail: e.target.value})} readOnly={isOwner} /></div>
+                <div><label className={labelCls}>Physical Address</label><textarea className={`${inputCls} resize-none ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} rows={2} value={localSettings.businessAddress} onChange={e => !isOwner && setLocalSettings({...localSettings, businessAddress: e.target.value})} readOnly={isOwner} /></div>
               </div>
             </div>
           </div>
@@ -185,11 +189,51 @@ export default function Settings() {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className={labelCls}>CGST %</label>
-                 <input type="number" className={inputCls} value={localSettings.cgstRate} onChange={(e) => setLocalSettings({...localSettings, cgstRate: e.target.value})} />
+                 <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cgstRate} onChange={(e) => !isOwner && setLocalSettings({...localSettings, cgstRate: e.target.value})} readOnly={isOwner} />
               </div>
               <div><label className={labelCls}>SGST %</label>
-                 <input type="number" className={inputCls} value={localSettings.sgstRate} onChange={(e) => setLocalSettings({...localSettings, sgstRate: e.target.value})} />
+                 <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.sgstRate} onChange={(e) => !isOwner && setLocalSettings({...localSettings, sgstRate: e.target.value})} readOnly={isOwner} />
               </div>
+            </div>
+          </div>
+
+
+          {/* Security & Access */}
+          <div className={`${card} p-6`}>
+            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+               <Shield className="w-4 h-4 text-orange-500" /> Security & Access
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Lock Screen</p>
+                  <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Lock cashier session when idle</p>
+                </div>
+                <button 
+                  onClick={() => !isOwner && handleToggle('autoLockEnabled')} 
+                  disabled={isOwner} 
+                  className={toggleCls(localSettings.autoLockEnabled) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}
+                >
+                  <span className={thumbCls(localSettings.autoLockEnabled)} />
+                </button>
+              </div>
+
+              {localSettings.autoLockEnabled && (
+                <div className={`pt-4 border-t flex items-center justify-between ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
+                  <div>
+                    <label className={`font-medium text-sm block mb-1 ${dm ? 'text-white' : 'text-slate-800'}`}>Lock Timeout (mins)</label>
+                  </div>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="60"
+                    className={`${inputCls} max-w-[100px] text-center ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    value={localSettings.autoLockTimeout} 
+                    onChange={e => !isOwner && setLocalSettings({...localSettings, autoLockTimeout: parseInt(e.target.value) || 1})}
+                    readOnly={isOwner}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -200,7 +244,7 @@ export default function Settings() {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className={labelCls}>Printer Engine</label>
-                <select className={inputCls} value={localSettings.printerType} onChange={e => setLocalSettings({...localSettings, printerType: e.target.value})}>
+                <select className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.printerType} onChange={e => !isOwner && setLocalSettings({...localSettings, printerType: e.target.value})} disabled={isOwner}>
                   <option>Thermal (80mm)</option>
                   <option>Thermal (58mm)</option>
                   <option>A4 Paper</option>
@@ -208,7 +252,7 @@ export default function Settings() {
                 </select>
               </div>
               <div><label className={labelCls}>Print Copies</label>
-                <input type="number" className={inputCls} min="1" max="5" value={localSettings.printerCopies} onChange={e => setLocalSettings({...localSettings, printerCopies: e.target.value})} />
+                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} min="1" max="5" value={localSettings.printerCopies} onChange={e => !isOwner && setLocalSettings({...localSettings, printerCopies: e.target.value})} readOnly={isOwner} />
               </div>
             </div>
           </div>
@@ -237,6 +281,7 @@ export default function Settings() {
             </div>
           </div>
 
+
           {/* Cloud Sync */}
           <div className={`${card} p-6`}>
             <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
@@ -247,34 +292,13 @@ export default function Settings() {
                 <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Cloud Sync</p>
                 <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Automatically push data to cloud every 5 mins</p>
               </div>
-              <button onClick={() => handleToggle('autoSync')} className={toggleCls(localSettings.autoSync)}>
+              <button disabled={isOwner} onClick={() => !isOwner && handleToggle('autoSync')} className={toggleCls(localSettings.autoSync) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}>
                 <span className={thumbCls(localSettings.autoSync)} />
               </button>
             </div>
           </div>
 
-          {/* Security & Access */}
-          <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Shield className="w-4 h-4 text-amber-500" /> Security & Access
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                 <div>
-                    <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Lock Screen</p>
-                    <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Lock admin session when idle</p>
-                 </div>
-                 <button onClick={() => handleToggle('autoLockEnabled')} className={toggleCls(localSettings.autoLockEnabled)}><span className={thumbCls(localSettings.autoLockEnabled)} /></button>
-              </div>
-              
-              <div className={`flex items-center justify-between transition-opacity pt-4 border-t ${dm ? 'border-slate-800' : 'border-slate-100'} ${!localSettings.autoLockEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-                 <div>
-                    <p className={`text-sm font-semibold ${dm ? 'text-slate-600' : 'text-slate-500'}`}>Lock Timeout (mins)</p>
-                 </div>
-                 <input type="number" min="1" max="60" className={`w-20 px-3 py-1.5 text-center rounded-lg text-sm border outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-50 border-slate-200'}`} value={localSettings.autoLockTimeout} onChange={e => setLocalSettings({...localSettings, autoLockTimeout: parseInt(e.target.value) || 1})} />
-              </div>
-            </div>
-          </div>
+
         </div>
 
         {/* 
@@ -288,15 +312,17 @@ export default function Settings() {
              {/* Inventory Categories */}
              <div className={`${card} p-5 flex flex-col`}>
                 <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Box className="w-4 h-4 text-orange-500" /> Inventory Categories</h4>
-                <div className="flex gap-2 mb-4">
-                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Category" value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} />
-                  <button onClick={handleAddCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                </div>
+                {!isOwner && (
+                  <div className="flex gap-2 mb-4">
+                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Category" value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} />
+                    <button onClick={handleAddCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
+                  </div>
+                )}
                 <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
                    {categories.map(c => (
                      <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
                        <span>{c.name}</span>
-                       <button onClick={() => handleDeleteCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>
+                       {!isOwner && <button onClick={() => handleDeleteCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
                      </div>
                    ))}
                    {categories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No categories configured</p>}
@@ -306,15 +332,17 @@ export default function Settings() {
              {/* Expense Categories */}
              <div className={`${card} p-5 flex flex-col`}>
                 <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Receipt className="w-4 h-4 text-purple-500" /> Expense Categories</h4>
-                <div className="flex gap-2 mb-4">
-                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Expense Type" value={newExpCat} onChange={e => setNewExpCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExpCategory()} />
-                  <button onClick={handleAddExpCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                </div>
+                {!isOwner && (
+                  <div className="flex gap-2 mb-4">
+                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Expense Type" value={newExpCat} onChange={e => setNewExpCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExpCategory()} />
+                    <button onClick={handleAddExpCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
+                  </div>
+                )}
                 <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
                    {expenseCategories.map(c => (
                      <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
                        <span>{c.name}</span>
-                       <button onClick={() => handleDeleteExpCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>
+                       {!isOwner && <button onClick={() => handleDeleteExpCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
                      </div>
                    ))}
                    {expenseCategories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No expense categories</p>}
@@ -324,15 +352,17 @@ export default function Settings() {
              {/* Suppliers */}
              <div className={`${card} p-5 flex flex-col`}>
                 <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Truck className="w-4 h-4 text-green-500" /> Authorized Suppliers</h4>
-                <div className="flex gap-2 mb-4">
-                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Supplier Name" value={newSup} onChange={e => setNewSup(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
-                  <button onClick={handleAddSupplier} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                </div>
+                {!isOwner && (
+                  <div className="flex gap-2 mb-4">
+                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Supplier Name" value={newSup} onChange={e => setNewSup(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
+                    <button onClick={handleAddSupplier} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
+                  </div>
+                )}
                 <div className={`flex flex-col gap-2 max-h-[300px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
                    {suppliers.map(s => (
                      <div key={s.id} className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium shadow-sm'}`}>
                        <span>{s.name}</span>
-                       <button onClick={() => handleDeleteSupplier(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
+                       {!isOwner && <button onClick={() => handleDeleteSupplier(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>}
                      </div>
                    ))}
                    {suppliers.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No suppliers configured</p>}
@@ -352,13 +382,15 @@ export default function Settings() {
           >
             <LogOut className="w-4 h-4 shrink-0" /> Sign Out
           </button>
-          <button
-            onClick={save}
-            style={{ minWidth: '160px', height: '44px' }}
-            className="shrink-0 px-5 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/30 active:scale-95 whitespace-nowrap"
-          >
-            <Save className="w-4 h-4 shrink-0" /> Save Preferences
-          </button>
+          {!isOwner && (
+            <button
+              onClick={save}
+              style={{ minWidth: '160px', height: '44px' }}
+              className="shrink-0 px-5 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/30 active:scale-95 whitespace-nowrap"
+            >
+              <Save className="w-4 h-4 shrink-0" /> Save Preferences
+            </button>
+          )}
         </div>
       </div>
     </div>

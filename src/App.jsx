@@ -29,7 +29,7 @@ import ActivityLogs from './pages/ActivityLogs';
 class LocalErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, showDetails: false };
   }
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
@@ -45,12 +45,32 @@ class LocalErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
+      // Mild styling fallback since we can't reliably read useApp() inside a generic class boundary effortlessly without an HOC wrapper
+      const dm = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
       return (
-        <div className="p-8 text-center bg-red-50 border border-red-100 rounded-3xl">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-red-800 mb-2">Component Crash</h3>
-          <p className="text-sm text-red-600 mb-4">{this.state.error?.message || 'Reload required'}</p>
-          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Reload App</button>
+        <div className={`p-10 m-6 rounded-3xl border flex flex-col items-center justify-center text-center shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${dm ? 'bg-slate-800' : 'bg-white shadow-sm'}`}>
+            <AlertTriangle className={`w-8 h-8 ${dm ? 'text-amber-500' : 'text-amber-500'}`} />
+          </div>
+          <h3 className={`text-xl font-bold tracking-tight mb-2 ${dm ? 'text-white' : 'text-slate-900'}`}>Something went wrong</h3>
+          <p className={`text-sm max-w-md mb-8 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+            We encountered an unexpected issue rendering this section. Your data is perfectly safe, but the screen needs to be reloaded.
+          </p>
+          <div className="flex gap-3">
+             <button onClick={() => window.location.reload()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-500/20">
+               Reload Application
+             </button>
+             <button onClick={() => this.setState({ showDetails: !this.state.showDetails })} className={`px-5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${dm ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-white'}`}>
+               {this.state.showDetails ? 'Hide Details' : 'Developer Info'}
+             </button>
+          </div>
+          {this.state.showDetails && (
+            <div className={`mt-8 p-5 rounded-xl text-left w-full max-w-3xl overflow-auto text-xs font-mono border ${dm ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+              <p className="font-bold mb-3 text-red-500">{this.state.error?.message || 'Unknown Error'}</p>
+              <pre className="whitespace-pre-wrap">{this.state.error?.stack}</pre>
+            </div>
+          )}
         </div>
       );
     }
@@ -81,7 +101,7 @@ function AutoLockWrapper({ children }) {
 }
 
 function ProtectedRoute({ children }) {
-  const { isAdminUnlocked, setIsAdminUnlocked, adminPin, darkMode } = useApp();
+  const { isAdminUnlocked, setIsAdminUnlocked, adminPin, darkMode, isOwner } = useApp();
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState(false);
@@ -95,7 +115,8 @@ function ProtectedRoute({ children }) {
     }
   }, [isAdminUnlocked]);
 
-  if (isAdminUnlocked) return children;
+  // Owners have free access to protected areas (with view-only limitations applied at page-level)
+  if (isAdminUnlocked || isOwner) return children;
 
   const handleSubmit = async (e) => {
     e.preventDefault();

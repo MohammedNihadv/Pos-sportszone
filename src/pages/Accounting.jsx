@@ -7,7 +7,7 @@ import { useApp } from '../context/AppContext';
 const ACCOUNTS = ['Cash', 'Shop GPay / UPI', 'Sales Revenue', 'Purchase Account', 'Expense Account'];
 
 export default function Accounting() {
-  const { darkMode, sales, expenses, purchases } = useApp();
+  const { darkMode, sales, expenses, purchases, isOwner } = useApp();
   const dm = darkMode;
   const [activeTab, setActiveTab] = useState('ledger');
   const [filter, setFilter] = useState('All');
@@ -129,7 +129,7 @@ export default function Accounting() {
               <thead><tr className={`border-b sticky top-0`}>
                 <th className={th}>ID</th><th className={th}>Date</th><th className={th}>Description</th>
                 <th className={th}>Account</th><th className={th + ' text-right'}>Debit</th><th className={th + ' text-right'}>Credit</th>
-                <th className={th + ' text-center'}>Actions</th>
+                {!isOwner && <th className={th + ' text-center'}>Actions</th>}
               </tr></thead>
               <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
                 {transactions
@@ -144,11 +144,13 @@ export default function Accounting() {
                       </td>
                       <td className="px-5 py-3.5 text-right font-semibold text-red-500">{t.debit ? `₹${t.debit.toLocaleString()}` : '—'}</td>
                       <td className="px-5 py-3.5 text-right font-semibold text-green-600">{t.credit ? `₹${t.credit.toLocaleString()}` : '—'}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => handleTxnDelete(t.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </td>
+                      {!isOwner && (
+                        <td className="px-5 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => handleTxnDelete(t.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
               </tbody>

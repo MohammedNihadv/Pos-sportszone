@@ -3,7 +3,7 @@ import { Activity, Database, HardDrive, Clock, Wifi, WifiOff, Shield, Terminal, 
 import { useApp } from '../context/AppContext';
 
 export default function SystemHealth() {
-  const { darkMode, addToast } = useApp();
+  const { darkMode, addToast, isOwner } = useApp();
   const dm = darkMode;
   const [health, setHealth] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -186,7 +186,7 @@ export default function SystemHealth() {
             {dbHealth.success ? 'Healthy' : 'Issues Found'}
           </p>
           {!dbHealth.success ? (
-            <button onClick={handleRepair} className="text-xs text-blue-500 font-bold hover:underline">Repair Now</button>
+            !isOwner ? <button onClick={handleRepair} className="text-xs text-blue-500 font-bold hover:underline">Repair Now</button> : <span className="text-xs text-rose-500 font-bold">Contact Admin</span>
           ) : (
             <p className={`text-xs mt-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>Integrity Verified</p>
           )}
@@ -352,6 +352,7 @@ export default function SystemHealth() {
       </div>
 
       {/* Software Update Section */}
+      {!isOwner && (
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-2">
@@ -399,8 +400,10 @@ export default function SystemHealth() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Error Logs */}
+      {!isOwner && (
       <div className={`${card} p-5`}>
         <div className="flex items-center gap-2 mb-4">
           <Terminal className="w-5 h-5 text-rose-500" />
@@ -422,6 +425,7 @@ export default function SystemHealth() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

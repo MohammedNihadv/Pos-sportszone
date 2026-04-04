@@ -99,7 +99,7 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
 }
 
 export default function Expenses() {
-  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories } = useApp();
+  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories, isOwner } = useApp();
   const dm = darkMode;
   const [modal, setModal] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
@@ -145,9 +145,11 @@ export default function Expenses() {
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Daily Expenses</h2>
           <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
         </div>
-        <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
-          <Plus className="w-4 h-4" /> Add Expense
-        </button>
+        {!isOwner && (
+          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -189,7 +191,7 @@ export default function Expenses() {
                 <th className={th}>Description</th>
                 <th className={th + ' text-right'}>Amount</th>
                 <th className={th + ' text-right'}>Running</th>
-                <th className={th + ' text-center'}>Actions</th>
+                {!isOwner && <th className={th + ' text-center'}>Actions</th>}
               </tr></thead>
               <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
                 {withBalance.map(e => (
@@ -201,16 +203,18 @@ export default function Expenses() {
                     <td className={`px-4 py-3 text-sm ${dm ? 'text-slate-200' : 'text-slate-700'}`}>{e.description}</td>
                     <td className="px-4 py-3 text-right font-bold text-red-500">₹{e.amount.toLocaleString()}</td>
                     <td className={`px-4 py-3 text-right text-xs font-semibold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>₹{e.running.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(e.id, e.category)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+                    {!isOwner && (
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDelete(e.id, e.category)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

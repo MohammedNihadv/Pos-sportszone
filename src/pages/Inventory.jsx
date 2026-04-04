@@ -97,7 +97,7 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
 }
 
 export default function Inventory() {
-  const { darkMode, addToast, products, setProducts, categories, setCategories } = useApp();
+  const { darkMode, addToast, products, setProducts, categories, setCategories, isOwner } = useApp();
   const dm = darkMode;
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
@@ -154,9 +154,11 @@ export default function Inventory() {
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Inventory</h2>
           <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sports Zone — {products.length} products across 7 categories</p>
         </div>
-        <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md">
-          <Plus className="w-4 h-4" /> Add Product
-        </button>
+        {!isOwner && (
+          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md">
+            <Plus className="w-4 h-4" /> Add Product
+          </button>
+        )}
       </div>
 
       {/* KPI Row */}
@@ -200,7 +202,7 @@ export default function Inventory() {
                 <th className={th + ' text-right'}>Price</th>
                 <th className={th + ' text-right'}>Margin</th>
                 <th className={th + ' text-right'}>Value</th>
-                <th className={th + ' text-center'}>Actions</th>
+                {!isOwner && <th className={th + ' text-center'}>Actions</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
@@ -228,12 +230,14 @@ export default function Inventory() {
                       <span className="text-xs font-bold text-green-600">{margin}%</span>
                     </td>
                     <td className="px-4 py-3.5 text-right font-semibold text-blue-600">₹{(p.stock * p.cost).toLocaleString()}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(p.id, p.name)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    </td>
+                    {!isOwner && (
+                      <td className="px-4 py-3.5 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDelete(p.id, p.name)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
