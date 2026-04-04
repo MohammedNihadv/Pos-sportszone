@@ -2,38 +2,28 @@ import { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
-const SUPPLIERS = ['Scampilo', 'Catos Jersey', 'Wafa Calicut', 'Noway', 'Captain', 'Calicut Sports Jersey', 'Impact Tirur', 'Soccer Sportstrade', 'Norvas', 'M.P Traders'];
+// Ensure we extract unique suppliers from both the supplier list and existing purchases
+function getUniqueSuppliers(suppliers, purchases) {
+  const set = new Set();
+  (suppliers || []).forEach(s => set.add(s.name));
+  (purchases || []).forEach(p => set.add(p.supplier));
+  return Array.from(set).sort();
+}
 
-const INITIAL_LEDGER = [
-  { id: 1,  date: '2026-03-01', inv: '',         supplier: 'Opening Balance', debit: null,  credit: null, note: 'Carried from Feb' },
-  { id: 2,  date: '2026-03-01', inv: 'b2c-3220', supplier: 'Scampilo',        debit: 5420,  credit: null, note: '' },
-  { id: 3,  date: '2026-03-02', inv: '',         supplier: 'Catos Jersey',    debit: 20000, credit: null, note: 'Jersey batch' },
-  { id: 4,  date: '2026-03-02', inv: '',         supplier: 'Catos Jersey',    debit: 3135,  credit: null, note: '' },
-  { id: 5,  date: '2026-03-02', inv: '',         supplier: 'Wafa Calicut',    debit: 3340,  credit: null, note: '' },
-  { id: 6,  date: '2026-03-02', inv: '1016',     supplier: 'Noway',           debit: 1200,  credit: null, note: '' },
-  { id: 7,  date: '2026-03-05', inv: 'b2c-3240', supplier: 'Scampilo',        debit: 3924,  credit: null, note: '' },
-  { id: 8,  date: '2026-03-06', inv: '2720',     supplier: 'Captain',         debit: 15288, credit: null, note: '' },
-  { id: 9,  date: '2026-03-11', inv: 'b2c-3260', supplier: 'Scampilo',        debit: 8469,  credit: null, note: '' },
-  { id: 10, date: '2026-03-14', inv: '19344',    supplier: 'Calicut Sports Jersey', debit: 12620, credit: null, note: 'Football jerseys' },
-  { id: 11, date: '2026-03-17', inv: 'b2c-3290', supplier: 'Scampilo',        debit: 2356,  credit: null, note: '' },
-  { id: 12, date: '2026-03-19', inv: '',         supplier: 'Impact Tirur',    debit: 1000,  credit: null, note: '' },
-  { id: 13, date: '2026-03-22', inv: '1240',     supplier: 'Norvas',          debit: 5280,  credit: null, note: '' },
-];
+const OPENING_BALANCE = 0;
 
-const OPENING_BALANCE = 7844;
-
-function EntryModal({ entry, onClose, onSave, dm }) {
+function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
   const isNew = !entry;
   const [form, setForm] = useState(entry || {
-    date: new Date().toISOString().split('T')[0], inv: '', supplier: SUPPLIERS[0], debit: '', credit: '', note: ''
+    date: new Date().toISOString().split('T')[0], inv: '', supplier: suppliersList[0] || '', debit: '', credit: '', note: ''
   });
 
   const handleSave = () => {
     onSave({
       ...form,
-      id: entry?.id || Date.now(),
-      debit: form.debit ? parseFloat(form.debit) : null,
-      credit: form.credit ? parseFloat(form.credit) : null,
+      id: entry?.id || `PO-${Date.now()}`,
+      debit: form.debit ? parseFloat(form.debit) : 0,
+      credit: form.credit ? parseFloat(form.credit) : 0,
     });
     onClose();
   };
@@ -45,24 +35,24 @@ function EntryModal({ entry, onClose, onSave, dm }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
-          <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Purchase Entry' : 'Edit Purchase Entry'}</h3>
+          <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Ledger Entry' : 'Edit Ledger Entry'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Date</label><input type="date" className={inputCls} value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))} /></div>
-            <div><label className={labelCls}>Invoice #</label><input className={inputCls} value={form.inv} onChange={e => setForm(p => ({...p, inv: e.target.value}))} placeholder="b2c-3300" /></div>
+            <div><label className={labelCls}>Invoice / Ref #</label><input className={inputCls} value={form.inv} onChange={e => setForm(p => ({...p, inv: e.target.value}))} placeholder="Optional" /></div>
           </div>
           <div><label className={labelCls}>Supplier</label>
             <select className={inputCls} value={form.supplier} onChange={e => setForm(p => ({...p, supplier: e.target.value}))}>
-              {SUPPLIERS.map(s => <option key={s}>{s}</option>)}
+              {suppliersList.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Debit (₹ Purchased)</label><input type="number" className={inputCls} value={form.debit || ''} onChange={e => setForm(p => ({...p, debit: e.target.value}))} placeholder="0" /></div>
-            <div><label className={labelCls}>Credit (₹ Returned)</label><input type="number" className={inputCls} value={form.credit || ''} onChange={e => setForm(p => ({...p, credit: e.target.value}))} placeholder="0" /></div>
+            <div><label className={labelCls}>Credit (₹ Paid/Returned)</label><input type="number" className={inputCls} value={form.credit || ''} onChange={e => setForm(p => ({...p, credit: e.target.value}))} placeholder="0" /></div>
           </div>
-          <div><label className={labelCls}>Note</label><input className={inputCls} value={form.note} onChange={e => setForm(p => ({...p, note: e.target.value}))} placeholder="Optional note..." /></div>
+          <div><label className={labelCls}>Note</label><input className={inputCls} value={form.note} onChange={e => setForm(p => ({...p, note: e.target.value}))} placeholder="Payment, Return, etc." /></div>
         </div>
         <div className="flex gap-3 px-5 pb-5">
           <button onClick={onClose} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border ${dm ? 'border-slate-600 text-slate-300' : 'border-slate-200 text-slate-600'}`}>Cancel</button>
@@ -76,21 +66,37 @@ function EntryModal({ entry, onClose, onSave, dm }) {
 }
 
 export default function PurchaseLedger() {
-  const { darkMode, addToast } = useApp();
+  const { darkMode, addToast, purchases, setPurchases, suppliers } = useApp();
   const dm = darkMode;
-  const [entries, setEntries] = useState(INITIAL_LEDGER);
+  
   const [openingBalance, setOpeningBalance] = useState(OPENING_BALANCE);
   const [openingEdit, setOpeningEdit] = useState(false);
   const [modal, setModal] = useState(null); // null | 'new' | entry object
   const [supplierFilter, setSupplierFilter] = useState('All');
 
-  const filtered = entries.filter(e => supplierFilter === 'All' || e.supplier === supplierFilter);
+  const supplierList = useMemo(() => getUniqueSuppliers(suppliers, purchases), [suppliers, purchases]);
+
+  // Map dynamic purchases from the DB into ledger entries
+  const entries = useMemo(() => {
+    return (purchases || []).map(p => ({
+      id: p.id,
+      date: p.date ? p.date.split(' ')[0] : '', // Extract just the date
+      inv: p.invoice,
+      supplier: p.supplier,
+      debit: p.total > 0 ? parseFloat(p.total) : null,
+      credit: p.paid > 0 ? parseFloat(p.paid) : null,
+      note: p.status === 'paid' ? 'Paid' : (p.status === 'partial' ? 'Partial' : 'Pending'),
+      // Keep original for edits later
+      _original: p
+    }));
+  }, [purchases]);
+
+  const filtered = useMemo(() => entries.filter(e => supplierFilter === 'All' || e.supplier === supplierFilter), [entries, supplierFilter]);
 
   const withBalance = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => new Date(a.date) - new Date(b.date));
     let running = openingBalance;
     return sorted.map(e => {
-      if (e.supplier === 'Opening Balance') return { ...e, running: openingBalance };
       running += (e.debit || 0) - (e.credit || 0);
       return { ...e, running };
     });
@@ -100,20 +106,42 @@ export default function PurchaseLedger() {
   const totalCredit = filtered.reduce((s, e) => s + (e.credit || 0), 0);
   const finalBalance = openingBalance + totalDebit - totalCredit;
 
-  const handleSave = (entry) => {
-    const exists = entries.find(e => e.id === entry.id);
+  const handleSave = async (entry) => {
+    // entry has: date, inv, supplier, debit, credit, note
+    const purchaseData = {
+      id: entry.id,
+      date: entry.date,
+      supplier: entry.supplier,
+      invoice: entry.inv || '',
+      items: entry._original?.items || 0,
+      total: entry.debit || 0,
+      paid: entry.credit || 0,
+      paymentMethod: entry._original?.paymentMethod || 'Cash',
+      status: entry.note || ((entry.debit || 0) === (entry.credit || 0) ? 'paid' : 'pending'),
+    };
+
+    if (window.api) {
+      await window.api.savePurchase(purchaseData);
+    }
+
+    const exists = purchases.find(p => p.id === purchaseData.id);
     if (exists) {
-      setEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
-      addToast(`${entry.supplier} entry updated`, 'success');
+      setPurchases(prev => prev.map(p => p.id === purchaseData.id ? purchaseData : p));
+      addToast(`${entry.supplier} ledger entry updated`, 'success');
     } else {
-      setEntries(prev => [...prev, entry]);
-      addToast(`${entry.supplier} added`, 'success');
+      setPurchases(prev => [...prev, purchaseData]);
+      addToast(`${entry.supplier} ledger entry added`, 'success');
     }
   };
 
-  const handleDelete = (id, supplier) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
-    addToast(`${supplier} entry removed`, 'warning');
+  const handleDelete = async (id, supplier) => {
+    if (window.confirm(`Delete entry for ${supplier}?`)) {
+      if (window.api) {
+        await window.api.deletePurchase(id);
+      }
+      setPurchases(prev => prev.filter(e => e.id !== id));
+      addToast(`${supplier} entry removed`, 'warning');
+    }
   };
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
@@ -124,7 +152,7 @@ export default function PurchaseLedger() {
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Purchase Ledger</h2>
-          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier transactions — click ✏️ to correct any entry</p>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier transactions — synced with your purchases database</p>
         </div>
         <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
           <Plus className="w-4 h-4" /> Add Entry
@@ -158,7 +186,7 @@ export default function PurchaseLedger() {
           <p className="text-2xl font-bold mt-1 text-red-500">₹{totalDebit.toLocaleString()}</p>
         </div>
         <div className={`${card} p-4`}>
-          <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Credit / Return</p>
+          <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Paid (Credit)</p>
           <p className="text-2xl font-bold mt-1 text-green-600">₹{totalCredit.toLocaleString()}</p>
         </div>
         <div className={`${card} p-4 border-l-4 border-l-blue-500`}>
@@ -170,7 +198,7 @@ export default function PurchaseLedger() {
       {/* Supplier Filter */}
       <div className={`${card} overflow-hidden`}>
         <div className={`flex gap-1 p-3 border-b flex-wrap ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
-          {['All', ...SUPPLIERS].map(s => (
+          {['All', ...supplierList].map(s => (
             <button key={s} onClick={() => setSupplierFilter(s)}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${supplierFilter === s ? 'bg-blue-600 text-white' : (dm ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-100')}`}
             >{s}</button>
@@ -190,44 +218,50 @@ export default function PurchaseLedger() {
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {withBalance.map(e => (
-                <tr key={e.id} className={`transition-colors ${e.supplier === 'Opening Balance' ? (dm ? 'bg-blue-900/20' : 'bg-blue-50') : (dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50')}`}>
+                <tr key={e.id} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
                   <td className={`px-4 py-3 text-xs font-mono ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.date}</td>
                   <td className="px-4 py-3 text-xs font-mono text-blue-500">{e.inv || '—'}</td>
-                  <td className={`px-4 py-3 font-semibold text-sm ${e.supplier === 'Opening Balance' ? 'text-blue-600' : (dm ? 'text-white' : 'text-slate-800')}`}>{e.supplier}</td>
+                  <td className={`px-4 py-3 font-semibold text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>{e.supplier}</td>
                   <td className={`px-4 py-3 text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{e.note || '—'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-red-500">{e.debit ? `₹${e.debit.toLocaleString()}` : '—'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-green-600">{e.credit ? `₹${e.credit.toLocaleString()}` : '—'}</td>
                   <td className="px-4 py-3 text-right font-bold text-blue-600">₹{e.running.toLocaleString()}</td>
                   <td className="px-4 py-3 text-center">
-                    {e.supplier !== 'Opening Balance' && (
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(e.id, e.supplier)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(e.id, e.supplier)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
-                <td colSpan={4} className={`px-4 py-3 ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total</td>
-                <td className="px-4 py-3 text-right text-red-500">₹{totalDebit.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-green-600">₹{totalCredit.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-blue-600">₹{finalBalance.toLocaleString()}</td>
-                <td />
-              </tr>
-            </tfoot>
+            {withBalance.length > 0 && (
+              <tfoot>
+                <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
+                  <td colSpan={4} className={`px-4 py-3 ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total</td>
+                  <td className="px-4 py-3 text-right text-red-500">₹{totalDebit.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-green-600">₹{totalCredit.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-blue-600">₹{finalBalance.toLocaleString()}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
+          {withBalance.length === 0 && (
+             <div className="flex flex-col items-center justify-center h-48 text-slate-400 w-full py-8 text-center col-span-8">
+               <p className="font-medium">No purchase ledger entries</p>
+               <p className="text-sm">Added purchases will automatically appear here.</p>
+             </div>
+          )}
         </div>
       </div>
 
       {(modal === 'new' || (modal && modal.id)) && (
-        <EntryModal entry={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} />
+        <EntryModal suppliersList={supplierList} entry={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} />
       )}
     </div>
   );

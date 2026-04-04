@@ -35,18 +35,18 @@ export default function Header() {
 
       <div className="flex items-center gap-3">
         <div className={`flex items-center gap-3 ${dm ? 'border-slate-700' : 'border-slate-200'}`}>
-          <div className="text-right hidden md:block pt-0.5">
-            <p className={`text-sm font-bold leading-tight tracking-wide ${dm ? 'text-white' : 'text-slate-800'}`}>
+          <div className="text-right hidden md:block mt-1">
+            <p className={`text-sm font-bold leading-none tracking-wide ${dm ? 'text-white' : 'text-slate-800'}`}>
               {currentUser?.name || 'Guest'}
             </p>
-            <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
+            <p className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${
               currentUser?.role === 'Owner' 
                 ? (dm ? 'text-indigo-400' : 'text-indigo-600')
                 : isAdminUnlocked 
                   ? (dm ? 'text-amber-400' : 'text-amber-600')
                   : (dm ? 'text-blue-400' : 'text-blue-600')
             }`}>
-              {currentUser?.role === 'Owner' ? 'Shop Owner' : currentUser?.role === 'Admin' ? 'ADMIN' : isAdminUnlocked ? 'Admin Unlocked' : (currentUser?.role || 'Staff')}
+              {currentUser?.role === 'Owner' ? 'Shop Owner' : currentUser?.role === 'Admin' ? 'Administrator' : isAdminUnlocked ? 'Admin Unlocked' : (currentUser?.role || 'Staff')}
             </p>
           </div>
           <div className="relative">

@@ -55,6 +55,23 @@ export default function Dashboard() {
       .slice(0, 5);
   }, [sales]);
 
+  const maxTopProducts = useMemo(() => {
+    let m = 0;
+    topProducts.forEach(d => {
+      if (d.sales > m) m = d.sales;
+    });
+    return Math.max(m, 10);
+  }, [topProducts]);
+
+  const maxSalesLine = useMemo(() => {
+    let m = 0;
+    chartData.forEach(d => {
+      if (d.sales > m) m = d.sales;
+      if (d.profit > m) m = d.profit;
+    });
+    return Math.max(m, 100);
+  }, [chartData]);
+
   const card = `rounded-2xl border shadow-sm transition-all hover:shadow-md ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
   return (
@@ -108,7 +125,7 @@ export default function Dashboard() {
             <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={dm ? '#334155' : '#f1f5f9'} />
               <XAxis dataKey="day" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, maxSalesLine]} tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{ background: dm ? '#1e293b' : '#fff', border: '1px solid ' + (dm ? '#334155' : '#e2e8f0'), borderRadius: 10, color: dm ? '#f1f5f9' : '#1e293b' }}
                 formatter={(value) => [`₹${value.toLocaleString()}`, '']}
@@ -127,7 +144,7 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dm ? '#334155' : '#f1f5f9'} />
-              <XAxis type="number" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis type="number" domain={[0, maxTopProducts]} tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis dataKey="name" type="category" tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={70} />
               <Tooltip
                 contentStyle={{ background: dm ? '#1e293b' : '#fff', border: '1px solid ' + (dm ? '#334155' : '#e2e8f0'), borderRadius: 10, color: dm ? '#f1f5f9' : '#1e293b' }}

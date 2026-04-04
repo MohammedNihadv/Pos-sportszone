@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('api', {
   // ─── NEW: App Info & Health ───
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getSystemHealth: () => ipcRenderer.invoke('get-system-health'),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
   // ─── NEW: Logging & Audit ───
   getRecentLogs: () => ipcRenderer.invoke('get-recent-logs'),

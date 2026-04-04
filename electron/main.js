@@ -410,11 +410,11 @@ safeHandle('get-suppliers', () => {
 safeHandle('save-supplier', (_, s) => {
   if (s.id) {
     getDb().prepare('UPDATE suppliers SET name=?, phone=?, email=?, address=? WHERE id=?')
-      .run(s.name, s.phone, s.email, s.address, s.id);
+      .run(s.name, s.phone || null, s.email || null, s.address || null, s.id);
     return s;
   } else {
     const info = getDb().prepare('INSERT INTO suppliers (name, phone, email, address) VALUES (?, ?, ?, ?)')
-      .run(s.name, s.phone, s.email, s.address);
+      .run(s.name, s.phone || null, s.email || null, s.address || null);
     return { ...s, id: info.lastInsertRowid };
   }
 });
