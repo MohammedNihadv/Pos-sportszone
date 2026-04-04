@@ -1,3 +1,5 @@
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import path from 'path';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
 import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint, getUsers, updateUserPin, saveUser } from './db.js';
