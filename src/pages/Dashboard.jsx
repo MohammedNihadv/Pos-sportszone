@@ -20,10 +20,13 @@ export default function Dashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySales = useMemo(() => 
-    (sales || []).filter(s => (s.date || s.created_at || '').startsWith(todayStr)).reduce((sum, s) => sum + (s.total || 0), 0),
-  [sales, todayStr]);
+  const todaySales = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return (sales || []).filter(s => {
+      const d = new Date(s.date || s.created_at || new Date());
+      return !isNaN(d.getTime()) && d.toISOString().split('T')[0] === today;
+    }).reduce((sum, s) => sum + (s.total || 0), 0);
+  }, [sales]);
 
   const monthlyRev = useMemo(() => 
     (sales || []).reduce((sum, s) => sum + (s.total || 0), 0),

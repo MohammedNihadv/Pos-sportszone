@@ -91,28 +91,37 @@ export default function PurchaseLedger() {
   const [openingEdit, setOpeningEdit] = useState(false);
   const [modal, setModal] = useState(null); // null | 'new' | entry object
   const [supplierFilter, setSupplierFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('');
 
   const supplierList = useMemo(() => getUniqueSuppliers(suppliers, purchases), [suppliers, purchases]);
 
   // Map dynamic purchases from the DB into ledger entries
   const entries = useMemo(() => {
-    return (purchases || []).map(p => ({
-      id: p.id,
-      date: p.date ? p.date.split(' ')[0] : '', // Extract just the date
-      inv: p.invoice,
-      supplier: p.supplier,
-      debit: p.total > 0 ? parseFloat(p.total) : null,
-      credit: p.paid > 0 ? parseFloat(p.paid) : null,
-      note: p.status === 'paid' ? 'Paid' : (p.status === 'partial' ? 'Partial' : 'Pending'),
-      // Keep original for edits later
-      _original: p
-    }));
+    return (purchases || []).map(p => {
+      const d = new Date(p.date || new Date());
+      const isValid = !isNaN(d.getTime());
+      return {
+        id: p.id,
+        rawDate: isValid ? d : new Date(),
+        date: isValid ? d.toISOString().split('T')[0] : '',
+        inv: p.invoice,
+        supplier: p.supplier,
+        debit: p.total > 0 ? parseFloat(p.total) : null,
+        credit: p.paid > 0 ? parseFloat(p.paid) : null,
+        note: p.status === 'paid' ? 'Paid' : (p.status === 'partial' ? 'Partial' : 'Pending'),
+        _original: p
+      };
+    });
   }, [purchases]);
 
-  const filtered = useMemo(() => entries.filter(e => supplierFilter === 'All' || e.supplier === supplierFilter), [entries, supplierFilter]);
+  const filtered = useMemo(() => entries.filter(e => {
+    const matchesSupplier = supplierFilter === 'All' || e.supplier === supplierFilter;
+    const matchesDate = !dateFilter || e.date === dateFilter;
+    return matchesSupplier && matchesDate;
+  }), [entries, supplierFilter, dateFilter]);
 
   const withBalance = useMemo(() => {
-    const sorted = [...filtered].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const sorted = [...filtered].sort((a, b) => a.rawDate - b.rawDate);
     let running = openingBalance;
     return sorted.map(e => {
       running += (e.debit || 0) - (e.credit || 0);
@@ -230,7 +239,21 @@ export default function PurchaseLedger() {
             </div>
             <h3 className={`font-bold text-xs uppercase tracking-widest ${dm ? 'text-slate-300' : 'text-slate-500'}`}>Transaction Ledger</h3>
           </div>
-          <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] mt-2 sm:mt-0 items-center">
+          <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 items-center mt-2 sm:mt-0">
+            <div className={`relative flex items-center px-3 py-1.5 rounded-xl border transition-all ${dm ? 'bg-slate-800 border-slate-700 focus-within:border-blue-500' : 'bg-white border-slate-200 focus-within:border-blue-500'}`}>
+              <input 
+                type="date" 
+                value={dateFilter} 
+                onChange={e => setDateFilter(e.target.value)}
+                className={`text-xs outline-none bg-transparent ${dm ? 'text-white' : 'text-slate-700'}`} 
+              />
+            </div>
+            {dateFilter && (
+              <button onClick={() => setDateFilter('')} className="p-1 px-2 text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                <X className="w-3.5 h-3.5" /> Clear
+              </button>
+            )}
+            <div className={`h-4 w-[1px] mx-2 ${dm ? 'bg-slate-700' : 'bg-slate-200'}`} />
             <div className="flex gap-2 shrink-0">
               {['All', ...supplierList].map(s => (
                 <button key={s} onClick={() => setSupplierFilter(s)}

@@ -163,32 +163,38 @@ export default function SalesLedger() {
   // Map live POS sales to ledger format + allow manual entries
   const [manualSales, setManualSales] = useState([]);
   const allSales = useMemo(() => {
-    const liveEntries = (liveSales || []).map(s => ({
-      id: `live-${s.id}`,
-      rawDate: new Date(s.date || s.created_at || new Date()),
-      date: new Date(s.date || s.created_at || new Date()).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      inv: `INV-${s.id}`,
-      description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
-      cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
-      selling: s.total || 0,
-      payment_method: s.paymentMethod || s.payment_method || 'cash',
-      amountPaid: s.amountPaid || s.amount_paid || s.total || 0,
-      changeAmount: s.changeAmount || s.change_amount || 0,
-      paymentBreakdown: s.paymentBreakdown || s.payment_breakdown || [{ method: s.paymentMethod || s.payment_method || 'cash', amount: s.amountPaid || s.amount_paid || s.total || 0}],
-      changeReturnMethod: s.changeReturnMethod || s.change_return_method || 'cash',
-      items: (s.items || []).length,
-      isLive: true,
-    }));
+    const liveEntries = (liveSales || []).map(s => {
+      const d = new Date(s.date || s.created_at || new Date());
+      const isValid = !isNaN(d.getTime());
+      return {
+        id: `live-${s.id}`,
+        rawDate: isValid ? d : new Date(),
+        date: isValid ? d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Invalid Date',
+        inv: `INV-${s.id}`,
+        description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
+        cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
+        selling: s.total || 0,
+        payment_method: s.paymentMethod || s.payment_method || 'cash',
+        amountPaid: s.amountPaid || s.amount_paid || s.total || 0,
+        changeAmount: s.changeAmount || s.change_amount || 0,
+        paymentBreakdown: s.paymentBreakdown || s.payment_breakdown || [{ method: s.paymentMethod || s.payment_method || 'cash', amount: s.amountPaid || s.amount_paid || s.total || 0}],
+        changeReturnMethod: s.changeReturnMethod || s.change_return_method || 'cash',
+        items: (s.items || []).length,
+        isLive: true,
+      };
+    });
     return [...liveEntries, ...manualSales].sort((a,b) => b.rawDate - a.rawDate);
   }, [liveSales, manualSales]);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
   const [dateFilter, setDateFilter] = useState('');
 
-  const filtered = useMemo(() => allSales.filter(s =>
-    ((s.description || '').toLowerCase().includes(search.toLowerCase()) || (s.inv && s.inv.includes(search))) &&
-    (!dateFilter || s.date === dateFilter)
-  ), [allSales, search, dateFilter]);
+  const filtered = useMemo(() => allSales.filter(s => {
+    const matchesSearch = (s.description || '').toLowerCase().includes(search.toLowerCase()) || (s.inv && s.inv.includes(search));
+    const saleYMD = s.rawDate instanceof Date && !isNaN(s.rawDate) ? s.rawDate.toISOString().split('T')[0] : '';
+    const matchesDate = !dateFilter || saleYMD === dateFilter;
+    return matchesSearch && matchesDate;
+  }), [allSales, search, dateFilter]);
 
   const totals = useMemo(() => filtered.reduce((acc, s) => ({
     cost: acc.cost + s.cost,
@@ -294,13 +300,21 @@ export default function SalesLedger() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search description or invoice..."
               className={`flex-1 text-sm outline-none bg-transparent ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800'}`} />
           </div>
-          <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-            className={`px-3 py-1.5 text-xs rounded-lg border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-200 text-slate-700'}`} />
-          {(search || dateFilter) && (
-            <button onClick={() => { setSearch(''); setDateFilter(''); }} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
-              <X className="w-3.5 h-3.5" /> Clear
-            </button>
-          )}
+          <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 items-center mt-2 sm:mt-0">
+            <div className={`relative flex items-center px-3 py-1.5 rounded-xl border transition-all ${dm ? 'bg-slate-800 border-slate-700 focus-within:border-blue-500' : 'bg-white border-slate-200 focus-within:border-blue-500'}`}>
+              <input 
+                type="date" 
+                value={dateFilter} 
+                onChange={e => setDateFilter(e.target.value)}
+                className={`text-xs outline-none bg-transparent ${dm ? 'text-white' : 'text-slate-700'}`} 
+              />
+            </div>
+            {dateFilter && (
+              <button onClick={() => setDateFilter('')} className="p-1 px-2 text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
+                <X className="w-3.5 h-3.5" /> Clear
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
