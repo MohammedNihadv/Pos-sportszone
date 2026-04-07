@@ -125,14 +125,24 @@ app.on('window-all-closed', () => {
 
 // ─── Helper: safe IPC wrapper ───
 function safeHandle(channel, handler) {
-  ipcMain.handle(channel, async (...args) => {
-    try {
-      return await handler(...args);
-    } catch (err) {
-      logError(`IPC:${channel}`, err);
-      throw err;
+  try {
+    ipcMain.handle(channel, async (...args) => {
+      try {
+        return await handler(...args);
+      } catch (err) {
+        logError(`IPC:${channel}`, err);
+        throw err;
+      }
+    });
+  } catch (e) {
+    // If a handler already exists for this channel, remove it and re-register
+    if (e.message && e.message.includes('second handler')) {
+      ipcMain.removeHandler(channel);
+      safeHandle(channel, handler);
+    } else {
+      logError(`IPC:RegisterFailed:${channel}`, e);
     }
-  });
+  }
 }
 
 // ─── IPC: App Info ───
@@ -299,15 +309,6 @@ function logAudit(action, details) {
     getDb().prepare("INSERT INTO audit_logs (action, details) VALUES (?, ?)").run(action, details);
   } catch(e) { logError('AuditLog', e); }
 }
-
-safeHandle('get-recent-logs', () => getRecentLogs());
-
-safeHandle('log-renderer-error', (_, data) => {
-  const errMsg = data.message || data.error || 'Unknown renderer error';
-  logError(`Renderer:${data.context || 'Unknown'}`, errMsg);
-  logDeveloperError(`Renderer:${data.context || 'Unknown'} - ${errMsg}`);
-  return true;
-});
 
 // ─── IPC: Products ───
 safeHandle('get-products', () => {
