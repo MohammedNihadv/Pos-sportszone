@@ -151,7 +151,7 @@ safeHandle('get-system-health', () => {
   });
 
   return {
-    version: '3.0.7',
+    version: app.getVersion(),
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     platform: process.platform,

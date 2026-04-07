@@ -237,9 +237,21 @@ export async function pullFromCloud(db) {
       if (!data || data.length === 0) continue;
 
       let count = 0;
-      const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'created_at');
       
-      const placeholders = columns.map(c => c === 'local_id' ? '?' : '?').join(', ');
+      // Safety: Only map Supabase columns to existing local SQLite columns
+      const tableInfo = db.prepare(`PRAGMA table_info(${t.local})`).all();
+      const validLocalColumns = new Set(tableInfo.map(col => col.name));
+
+      const dataColumns = Object.keys(data[0]);
+      const columns = dataColumns.filter(c => {
+        // Exclude completely Supabase-only columns
+        if (['id', 'created_at', 'synced_at', 'updated_at'].includes(c)) return false;
+        // Check if the target local column exists
+        const mappingCol = c === 'local_id' ? 'id' : c;
+        return validLocalColumns.has(mappingCol);
+      });
+      
+      const placeholders = columns.map(() => '?').join(', ');
       const colNames = columns.map(c => c === 'local_id' ? 'id' : c).join(', ');
 
       const upsertStmt = db.prepare(`INSERT OR REPLACE INTO ${t.local} (${colNames}) VALUES (${placeholders})`);

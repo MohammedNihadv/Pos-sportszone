@@ -266,15 +266,15 @@ export default function Settings() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Cash Balance</label>
-                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cashBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, cashBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
+                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cashBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, cashBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
               </div>
               <div>
                 <label className={labelCls}>UPI Balance</label>
-                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.upiBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, upiBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
+                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.upiBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, upiBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
               </div>
               <div>
                 <label className={labelCls}>Bank Balance</label>
-                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.bankBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, bankBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
+                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.bankBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, bankBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
               </div>
             </div>
           </div>
