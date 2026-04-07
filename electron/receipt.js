@@ -18,6 +18,7 @@ export function generateReceiptHTML(sale, settings = {}) {
   const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : sale.items;
   const date = sale.date ? new Date(sale.date).toLocaleString('en-IN') : new Date().toLocaleString('en-IN');
   const saleId = sale.id || Date.now();
+  const printerType = settings.printerType || 'Thermal (80mm)';
 
   const businessName = settings.businessName || 'SPORTS ZONE';
   const businessAddress = settings.businessAddress || 'Sports Goods & Accessories';
@@ -32,10 +33,13 @@ export function generateReceiptHTML(sale, settings = {}) {
 
   const itemRows = items.map(item => `
     <tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${item.emoji || '📦'} ${item.name}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-size:12px;">${item.qty}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:12px;">₹${Number(item.price).toFixed(2)}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;font-size:12px;font-weight:600;">₹${(item.qty * item.price).toFixed(2)}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid #f1f5f9;">
+        <div style="font-weight:600;font-size:12px;">${item.name}</div>
+        <div style="font-size:10px;color:#64748b;">${item.sku || ''}</div>
+      </td>
+      <td style="padding:6px 4px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px;">${item.qty}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:12px;">₹${Number(item.price).toLocaleString()}</td>
+      <td style="padding:6px 4px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:12px;font-weight:800;">₹${(item.qty * item.price).toLocaleString()}</td>
     </tr>
   `).join('');
 
@@ -43,36 +47,51 @@ export function generateReceiptHTML(sale, settings = {}) {
   const discount = sale.discount || 0;
   const afterDiscount = subtotal - discount;
   
-  // Dynamic Tax Calculation for Receipt
   const totalTaxRate = cgstRate + sgstRate;
   const taxableAmount = totalTaxRate > 0 ? afterDiscount / (1 + totalTaxRate) : afterDiscount;
   const cgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (cgstRate / totalTaxRate) : 0;
   const sgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (sgstRate / totalTaxRate) : 0;
+
+  // Determine layout style classes
+  const isThermal = printerType.includes('Thermal');
+  const width = isThermal ? (printerType.includes('58mm') ? '58mm' : '80mm') : (printerType === 'A5 Paper' ? '148mm' : '210mm');
+  const padding = isThermal ? '10px' : '40px';
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 24px; color: #1e293b; background: #fff; }
-    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 16px; }
-    .header h1 { font-size: 22px; font-weight: 800; color: #1e40af; text-transform: uppercase; }
-    .header p { font-size: 11px; color: #64748b; margin-top: 4px; }
-    .header .gstin { font-weight: bold; color: #2563eb; margin-top: 2px; }
-    .meta { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; color: #475569; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    th { padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-         color: #64748b; border-bottom: 2px solid #e2e8f0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+    body { 
+      font-family: 'Segoe UI', system-ui, sans-serif; 
+      color: #0f172a; 
+      background: white;
+      width: ${width};
+      margin: 0 auto;
+      padding: ${padding};
+    }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 12px; }
+    .header h1 { font-size: ${isThermal ? '18px' : '28px'}; font-weight: 900; color: #1e40af; text-transform: uppercase; margin-bottom: 2px; }
+    .header p { font-size: 11px; color: #64748b; line-height: 1.4; }
+    .gstin { font-weight: 700; color: #3b82f6; margin-top: 4px; }
+    
+    .meta { display: flex; justify-content: space-between; margin: 15px 0; font-size: 11px; font-weight: 600; color: #475569; }
+    
+    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    th { padding: 8px 4px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; }
     th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: right; }
     th:nth-child(2) { text-align: center; }
-    .totals { border-top: 2px solid #e2e8f0; padding-top: 12px; }
-    .totals .row { display: flex; justify-content: space-between; padding: 3px 8px; font-size: 12px; color: #475569; }
-    .totals .grand { font-size: 16px; font-weight: 800; color: #1e40af; padding: 8px; background: #eff6ff; border-radius: 8px; margin-top: 8px; }
-    .footer { text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cbd5e1; }
-    .footer p { font-size: 11px; color: #94a3b8; }
-    .footer .thanks { font-size: 14px; font-weight: 700; color: #3b82f6; margin-bottom: 4px; }
-    .payment-badge { display: inline-block; padding: 2px 10px; background: #dbeafe; color: #1d4ed8; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+    .totals-box { background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569; font-weight: 600; }
+    .grand-total { border-top: 2px dashed #cbd5e1; margin-top: 8px; padding-top: 8px; font-size: 18px; font-weight: 900; color: #1e40af; }
+    
+    .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #cbd5e1; }
+    .footer .thanks { font-size: 14px; font-weight: 800; color: #3b82f6; margin-bottom: 5px; }
+    .footer p { font-size: 10px; color: #94a3b8; font-weight: 500; }
+    
+    .badge { display: inline-block; padding: 3px 12px; background: #dbeafe; color: #1d4ed8; border-radius: 20px; font-size: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -84,63 +103,100 @@ export function generateReceiptHTML(sale, settings = {}) {
   </div>
 
   <div class="meta">
-    <span><strong>Receipt #</strong> ${saleId}</span>
-    <span><strong>Date:</strong> ${date}</span>
+    <span>#INV-${saleId}</span>
+    <span>${date}</span>
   </div>
-  <div style="margin-bottom:12px;">
-    <span class="payment-badge">${(sale.payment_method || sale.paymentMethod || 'Cash').toUpperCase()}</span>
-  </div>
+
+  <div class="badge">${(sale.payment_method || sale.paymentMethod || 'Cash')}</div>
 
   <table>
     <thead>
       <tr>
-        <th>Item</th>
+        <th>Item Name</th>
         <th>Qty</th>
-        <th>Price</th>
-        <th style="text-align:right;">Total</th>
+        <th>Rate</th>
+        <th style="text-align:right;">Amount</th>
       </tr>
     </thead>
-    <tbody>
-      ${itemRows}
-    </tbody>
+    <tbody>${itemRows}</tbody>
   </table>
 
-  <div class="totals">
-    <div class="row"><span>Subtotal</span><span>₹${subtotal.toFixed(2)}</span></div>
-    ${discount > 0 ? `<div class="row" style="color:#ef4444;"><span>Discount</span><span>-₹${discount.toFixed(2)}</span></div>` : ''}
-    ${cgstRateRaw > 0 ? `<div class="row"><span>CGST (${cgstRateRaw}%)</span><span>₹${cgst.toFixed(2)}</span></div>` : ''}
-    ${sgstRateRaw > 0 ? `<div class="row"><span>SGST (${sgstRateRaw}%)</span><span>₹${sgst.toFixed(2)}</span></div>` : ''}
-    <div class="row grand"><span>Grand Total</span><span>₹${Number(sale.total || afterDiscount).toFixed(2)}</span></div>
+  <div class="totals-box">
+    <div class="total-row"><span>Subtotal</span><span>₹${subtotal.toLocaleString()}</span></div>
+    ${discount > 0 ? `<div class="total-row" style="color:#ef4444;"><span>Discount</span><span>-₹${discount.toLocaleString()}</span></div>` : ''}
+    ${cgstRateRaw > 0 ? `<div class="total-row"><span>CGST (${cgstRateRaw}%)</span><span>₹${cgst.toFixed(2)}</span></div>` : ''}
+    ${sgstRateRaw > 0 ? `<div class="total-row"><span>SGST (${sgstRateRaw}%)</span><span>₹${sgst.toFixed(2)}</span></div>` : ''}
+    <div class="total-row grand-total"><span>Total</span><span>₹${Number(sale.total || afterDiscount).toLocaleString()}</span></div>
   </div>
 
   <div class="footer">
-    <p class="thanks">Thank you for shopping at ${businessName}!</p>
-    <p>Visit us again • Exchange within 7 days with receipt</p>
+    <p class="thanks">Thank You for Visiting!</p>
+    <p>Please keep this receipt for exchanges within 7 days.</p>
+    <p>Powered by SportsZone Cloud POS</p>
   </div>
 </body>
 </html>`;
+}
+
+export async function generateReceiptImage(sale, settings = {}) {
+  try {
+    const { BrowserWindow } = await import('electron');
+    const isThermal = (settings.printerType || '').includes('Thermal');
+    const width = isThermal ? ((settings.printerType || '').includes('58mm') ? 300 : 400) : 800;
+
+    const win = new BrowserWindow({
+      width,
+      height: 1200,
+      show: false,
+      webPreferences: { nodeIntegration: false, contextIsolation: true }
+    });
+
+    const html = generateReceiptHTML(sale, settings);
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    
+    // Wait for layout rendering
+    await new Promise(r => setTimeout(r, 600));
+
+    // Auto-crop to content height
+    const height = await win.webContents.executeJavaScript('document.body.scrollHeight');
+    win.setSize(width, height + 50);
+
+    const image = await win.webContents.capturePage();
+    win.close();
+    return image.toDataURL();
+  } catch (err) {
+    logError('ImageGen', err);
+    return null;
+  }
 }
 
 export async function downloadReceiptPDF(mainWindow, sale, settings = {}) {
   try {
     const html = generateReceiptHTML(sale, settings);
     const saleId = sale.id || Date.now();
-    const fileName = `receipt_${saleId}_${Date.now()}.pdf`;
+    const fileName = `receipt_INV_${saleId}_${Date.now()}.pdf`;
     const filePath = path.join(getReceiptDir(), fileName);
+    const printerType = settings.printerType || 'Thermal (80mm)';
 
     const { BrowserWindow } = await import('electron');
+    
+    // Default size logic
+    let pageSize = { width: 80000, height: 200000 }; // Default Thermal strip
+    if (printerType === 'A4 Paper') pageSize = 'A4';
+    else if (printerType === 'A5 Paper') pageSize = 'A5';
+
     const receiptWin = new BrowserWindow({
-      width: 400,
-      height: 600,
+      width: 600,
+      height: 900,
       show: false,
       webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
 
     await receiptWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     const pdfBuffer = await receiptWin.webContents.printToPDF({
-      pageSize: { width: 80000, height: 200000 },
+      pageSize,
       printBackground: true,
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
     });
@@ -148,7 +204,7 @@ export async function downloadReceiptPDF(mainWindow, sale, settings = {}) {
     fs.writeFileSync(filePath, pdfBuffer);
     receiptWin.close();
 
-    logInfo('Receipt', `Saved receipt PDF: ${filePath}`);
+    logInfo('Receipt', `Saved PDF: ${filePath}`);
     return { success: true, path: filePath };
   } catch (err) {
     logError('Receipt', err);

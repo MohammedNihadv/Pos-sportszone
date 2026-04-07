@@ -7,51 +7,64 @@ import { useApp } from '../context/AppContext';
 const ACCOUNTS = ['Cash', 'Shop GPay / UPI', 'Sales Revenue', 'Purchase Account', 'Expense Account'];
 
 export default function Accounting() {
-  const { darkMode, sales, expenses, purchases, isOwner } = useApp();
+  const { darkMode, sales, expenses, purchases, isOwner, appSettings } = useApp();
   const dm = darkMode;
   const [activeTab, setActiveTab] = useState('ledger');
   const [filter, setFilter] = useState('All');
 
   // Compute Transactions
   const transactions = [
-    ...(sales || []).map(s => ({
-      id: `S-${s.id}`, date: (s.created_at || s.date || '').split(' ')[0], 
-      description: `Sale - INV-${s.id}`, account: s.payment_method === 'Cash' ? 'Cash' : 'Shop GPay / UPI', 
-      debit: null, credit: s.total || 0, type: 'income'
-    })),
-    ...(expenses || []).map(e => ({
-      id: `E-${e.id}`, date: e.date || '', 
-      description: e.description || e.category || 'Expense', account: (e.paymentMethod || 'Cash') === 'Cash' ? 'Cash' : 'Shop GPay / UPI', 
-      debit: e.amount || 0, credit: null, type: 'expense'
-    })),
-    ...(purchases || []).map(p => ({
-      id: `P-${p.id}`, date: p.date || '', 
-      description: `Purchase - ${p.supplier || 'Unknown'} (${p.invoice || 'No Inv'})`, account: (p.paymentMethod || 'Cash') === 'Cash' ? 'Cash' : 'Shop GPay / UPI', 
-      debit: p.paid || 0, credit: null, type: 'expense'
-    }))
+    ...(sales || []).map(s => {
+      const pm = (s.paymentMethod || s.payment_method || '').toLowerCase();
+      const isCash = pm === 'cash';
+      return {
+        id: `S-${s.id}`, 
+        date: (s.created_at || s.date || '').split(' ')[0], 
+        description: `Sale - INV-${s.id}`, 
+        account: isCash ? 'Cash' : 'Shop GPay / UPI', 
+        debit: null, 
+        credit: s.total || 0, 
+        type: 'income'
+      };
+    }),
+    ...(expenses || []).map(e => {
+      const pm = (e.paymentMethod || 'Cash').toLowerCase();
+      return {
+        id: `E-${e.id}`, 
+        date: e.date || '', 
+        description: e.description || e.category || 'Expense', 
+        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI', 
+        debit: e.amount || 0, 
+        credit: null, 
+        type: 'expense'
+      };
+    }),
+    ...(purchases || []).map(p => {
+      const pm = (p.paymentMethod || 'Cash').toLowerCase();
+      return {
+        id: `P-${p.id}`, 
+        date: p.date || '', 
+        description: `Purchase - ${p.supplier || 'Unknown'} (${p.invoice || 'No Inv'})`, 
+        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI', 
+        debit: p.paid || 0, 
+        credit: null, 
+        type: 'expense'
+      };
+    })
   ].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-  // Compute Ledger
-  const safeS = sales || []; const safeE = expenses || []; const safeP = purchases || [];
-  const cashSales = safeS.filter(s => s.payment_method === 'Cash').reduce((a,b) => a + (b.total || 0), 0);
-  const cashExp = safeE.filter(e => (e.paymentMethod || 'Cash') === 'Cash').reduce((a,b) => a + (b.amount || 0), 0);
-  const cashPur = safeP.filter(p => (p.paymentMethod || 'Cash') === 'Cash').reduce((a,b) => a + (b.paid || 0), 0);
-  
-  const gpaySales = safeS.filter(s => s.payment_method !== 'Cash').reduce((a,b) => a + (b.total || 0), 0);
-  const gpayExp = safeE.filter(e => (e.paymentMethod || 'Cash') !== 'Cash').reduce((a,b) => a + (b.amount || 0), 0);
-  const gpayPur = safeP.filter(p => (p.paymentMethod || 'Cash') !== 'Cash').reduce((a,b) => a + (b.paid || 0), 0);
-
-  const totalSalesAmt = safeS.reduce((a,b) => a + (b.total || 0), 0);
-  const totalPurchasePaid = safeP.reduce((a,b) => a + (b.paid || 0), 0);
-  const totalExpensesAmt = safeE.reduce((a,b) => a + (b.amount || 0), 0);
-
+  // Ledger Summary
   const ledgerAccounts = [
-    { name: 'Cash', type: 'Asset', balance: cashSales - cashExp - cashPur },
-    { name: 'Shop GPay / UPI', type: 'Asset', balance: gpaySales - gpayExp - gpayPur },
-    { name: 'Sales Revenue', type: 'Income', balance: totalSalesAmt },
-    { name: 'Purchase Account', type: 'Expense', balance: totalPurchasePaid },
-    { name: 'General Expenses', type: 'Expense', balance: totalExpensesAmt },
+    { name: 'Cash', type: 'Asset', balance: appSettings?.cashBalance || 0 },
+    { name: 'Shop GPay / UPI', type: 'Asset', balance: appSettings?.upiBalance || 0 },
+    { name: 'Sales Revenue', type: 'Income', balance: (sales || []).reduce((a,b) => a + (b.total || 0), 0) },
+    { name: 'Purchase Account', type: 'Expense', balance: (purchases || []).reduce((a,b) => a + (b.paid || 0), 0) },
+    { name: 'General Expenses', type: 'Expense', balance: (expenses || []).reduce((a,b) => a + (b.amount || 0), 0) },
   ];
+
+  const totalSalesAmt = (sales || []).reduce((a,b) => a + (b.total || 0), 0);
+  const totalPurchasePaid = (purchases || []).reduce((a,b) => a + (b.paid || 0), 0);
+  const totalExpensesAmt = (expenses || []).reduce((a,b) => a + (b.amount || 0), 0);
 
   const totalRevenue = totalSalesAmt;
   const totalExpAmt = totalPurchasePaid + totalExpensesAmt;
@@ -60,15 +73,15 @@ export default function Accounting() {
   const handleTxnDelete = () => alert('Cannot delete generic transaction. Go to the Sales or Expenses tab to revert.');
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
-  const th = `px-5 py-3 text-left font-medium text-xs uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
+  const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
   const tabs = ['ledger', 'transactions', 'p&l'];
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Accounting</h2>
-          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Ledger, transactions, and financial reports</p>
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Accounting</h2>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Ledger, transactions, and financial reports</p>
         </div>
         <div className="flex gap-2">
           <select className={`px-3 py-2 rounded-lg text-sm border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}>

@@ -11,9 +11,11 @@ import { useNavigate } from 'react-router-dom';
 
 
 export default function Dashboard() {
-  const { darkMode, products, sales, expenses, purchases, currentUser } = useApp();
+  const { darkMode, products, sales, expenses, purchases, currentUser, isAdminUnlocked, isOwner } = useApp();
   const dm = darkMode;
+  const showFinancials = isOwner || isAdminUnlocked;
   const navigate = useNavigate();
+  const [chartRange, setChartRange] = useState('Daily'); // Toggle state for the chart view
 
   // Time-aware greeting
   const hour = new Date().getHours();
@@ -28,13 +30,31 @@ export default function Dashboard() {
     }).reduce((sum, s) => sum + (s.total || 0), 0);
   }, [sales]);
 
-  const monthlyRev = useMemo(() => 
-    (sales || []).reduce((sum, s) => sum + (s.total || 0), 0),
-  [sales]);
+  const monthlyRev = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return (sales || []).reduce((sum, s) => {
+      const d = new Date(s.date || s.created_at);
+      if (!isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+        return sum + (s.total || 0);
+      }
+      return sum;
+    }, 0);
+  }, [sales]);
 
-  const totalExpense = useMemo(() => 
-    (expenses || []).reduce((sum, e) => sum + (e.amount || 0), 0),
-  [expenses]);
+  const totalExpense = useMemo(() => {
+     const now = new Date();
+     const currentMonth = now.getMonth();
+     const currentYear = now.getFullYear();
+     return (expenses || []).reduce((sum, e) => {
+        const d = new Date(e.date || e.created_at);
+        if (!isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+           return sum + (e.amount || 0);
+        }
+        return sum;
+     }, 0);
+  }, [expenses]);
 
   const pendingPayments = useMemo(() => 
     (purchases || []).reduce((sum, p) => sum + ((p.total || 0) - (p.paid || 0)), 0),
@@ -47,7 +67,7 @@ export default function Dashboard() {
       const d = new Date();
       d.setDate(d.getDate() - (6 - offset));
       const dayStr = d.toISOString().split('T')[0];
-      const daySalesArr = sales.filter(s => (s.date || s.created_at || '').startsWith(dayStr));
+      const daySalesArr = (sales || []).filter(s => (s.date || s.created_at || '').startsWith(dayStr));
       const daySales = daySalesArr.reduce((sum, s) => sum + (s.total || 0), 0);
       const dayCost = daySalesArr.reduce((sum, s) => {
         return sum + (s.items || []).reduce((itemSum, item) => itemSum + ((item.cost || 0) * item.qty), 0);
@@ -56,12 +76,13 @@ export default function Dashboard() {
     });
   }, [sales]);
 
-  // Inventory Health
+  // Inventory Health - FIXED Logic
   const { lowStock, outOfStock } = useMemo(() => {
     let low = 0, out = 0;
     (products || []).forEach(p => {
-      if (p.stock <= 0) out++;
-      else if (p.stock <= 10) low++;
+      const stock = parseInt(p.stock) || 0;
+      if (stock <= 0) out++;
+      else if (stock <= 5) low++; // Alert on 5 or fewer items
     });
     return { lowStock: low, outOfStock: out };
   }, [products]);
@@ -81,15 +102,12 @@ export default function Dashboard() {
 
   // Top VIP Customers
   const topCustomers = useMemo(() => {
-    // Assuming walk-in for now, but grouping by a hypothetical customer ID if available
-    // For now we map true recent high-value sales as "VIP Transactions" or basic grouping
-    // Since we don't have a separate 'customers' array deep linked yet, we'll aggregate by payment source or just show top invoices.
-    return sales.slice().sort((a,b) => b.total - a.total).slice(0, 5);
+    return (sales || []).slice().sort((a,b) => (b.total || 0) - (a.total || 0)).slice(0, 5);
   }, [sales]);
 
   const topProducts = useMemo(() => {
     const itemCounts = {};
-    sales.forEach(s => {
+    (sales || []).forEach(s => {
       s.items?.forEach(item => {
         itemCounts[item.name] = (itemCounts[item.name] || 0) + item.qty;
       });
@@ -120,15 +138,15 @@ export default function Dashboard() {
   const card = `rounded-2xl border shadow-sm transition-all hover:shadow-md ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto pb-20">
       {/* Page Heading */}
       {/* Premium Executive Welcome */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-2">
         <div>
-          <h2 className={`text-2xl font-black tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>
             {greeting}, {currentUser?.name || currentUser?.role || 'Admin'}
           </h2>
-          <p className={`text-sm mt-1 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
             Here is your business overview for {dateStr}.
           </p>
         </div>
@@ -165,13 +183,13 @@ export default function Dashboard() {
           icon={<TrendingUp className="w-5 h-5" />} color="blue"
         />
         <KPICard dm={dm} card={card}
-          title="Total Expenses" amount={`₹${totalExpense.toLocaleString()}`}
-          trend="All categories" trendUp={false}
+          title="Total Expenses" amount={showFinancials ? `₹${totalExpense.toLocaleString()}` : '₹ ***'}
+          trend={showFinancials ? "All categories" : "Restricted"} trendUp={false}
           icon={<Receipt className="w-5 h-5" />} color="purple"
         />
         <KPICard dm={dm} card={card}
-          title="Pending Payments" amount={`₹${pendingPayments.toLocaleString()}`}
-          trend="Supplier dues" trendUp={false}
+          title="Pending Payments" amount={showFinancials ? `₹${pendingPayments.toLocaleString()}` : '₹ ***'}
+          trend={showFinancials ? "Supplier dues" : "Restricted"} trendUp={false}
           icon={<AlertCircle className="w-5 h-5" />} color="red"
         />
       </div>
@@ -183,11 +201,18 @@ export default function Dashboard() {
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className={`font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>Sales Overview</h3>
-              <p className={`text-xs mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Daily sales and profit this week</p>
+              <p className={`text-xs mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Daily sales {showFinancials ? 'and profit' : ''} this week</p>
             </div>
             <div className="flex gap-2">
-              {['Daily', 'Weekly', 'Monthly'].map((t, i) => (
-                <button key={t} className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${i === 0 ? 'bg-blue-600 text-white' : (dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100')}`}>{t}</button>
+              {['Daily', 'Weekly', 'Monthly'].map(t => (
+                <button 
+                  key={t} 
+                  onClick={() => setChartRange(t)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors 
+                    ${chartRange === t ? 'bg-blue-600 text-white' : (dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100')}`}
+                >
+                  {t}
+                </button>
               ))}
             </div>
           </div>
@@ -212,7 +237,7 @@ export default function Dashboard() {
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
               <Area type="monotone" dataKey="sales" name="Revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={800} />
-              <Area type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={800} />
+              {showFinancials && <Area type="monotone" dataKey="profit" name="Net Profit" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" activeDot={{ r: 6, strokeWidth: 0 }} animationDuration={800} />}
             </AreaChart>
           </ResponsiveContainer>
         </div>

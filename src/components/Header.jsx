@@ -16,7 +16,6 @@ const routeNames = {
   '/expenses':       { title: 'Daily Expenses', subtitle: 'Track shop expenses and category breakdown' },
   '/settings':       { title: 'Settings', subtitle: 'System configuration and preferences' },
   '/activity-logs':  { title: 'Activity Logs', subtitle: 'Secure audit trail of actions taken in the shop' },
-  '/roadmap':        { title: 'Roadmap', subtitle: 'Feature progress and development milestones' },
 };
 
 export default function Header() {

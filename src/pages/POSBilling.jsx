@@ -146,7 +146,7 @@ function ProductCard({ product, dm, onAdd }) {
             animate={{ opacity: 0, y: -40, scale: 1.5 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="absolute top-2 right-4 text-green-500 font-black text-xl z-10 pointer-events-none drop-shadow-md"
+            className="absolute top-2 right-4 text-green-500 font-bold text-xl z-10 pointer-events-none drop-shadow-md"
           >
             +1
           </motion.div>
@@ -173,8 +173,14 @@ function ProductCard({ product, dm, onAdd }) {
 
 // ---- Main POS Content ----
 function POSContent() {
-  const { darkMode, addToast, products, setProducts, setSales } = useApp();
+  const { 
+    darkMode, addToast, products, setProducts, setSales, 
+    appSettings, saveAppSettings, refreshSales, refreshProducts, loadData,
+    isAdminUnlocked, isOwner
+  } = useApp();
   const { cart, addToCart, clearCart, discount, setDiscount, subtotal, discountAmount, cgst, sgst, grandTotal } = useCart();
+  const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
+  const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
   const dm = darkMode;
   const [search, setSearch] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
@@ -199,21 +205,51 @@ function POSContent() {
       paymentBreakdown: paymentData.paymentBreakdown,
     };
 
+    // Calculate balance updates for live accounting
+    let cashDelta = 0;
+    let upiDelta = 0;
+    (paymentData.payments || []).forEach(p => {
+      const m = (p.method || '').toLowerCase();
+      if (m === 'cash') cashDelta += p.amount;
+      else if (m === 'upi' || m === 'bank' || m === 'card') upiDelta += p.amount;
+    });
+
+    if (paymentData.changeAmount > 0) {
+      if (paymentData.changeReturnMethod === 'cash') cashDelta -= paymentData.changeAmount;
+      else upiDelta -= paymentData.changeAmount;
+    }
+
     if (window.api) {
       await window.api.saveSale(saleData);
+      
+      // Update real-time balances atomically in the database
+      const updates = {};
+      if (cashDelta !== 0) updates.cashBalance = cashDelta;
+      if (upiDelta !== 0) updates.upiBalance = upiDelta;
+      
+      if (Object.keys(updates).length > 0) {
+        await window.api.incrementSettings(updates);
+      }
+
       // Fetch fresh data to update UI immediately
-      const [freshSales, freshProducts] = await Promise.all([
-        window.api.getSales(),
-        window.api.getProducts()
+      await Promise.all([
+        refreshSales(),
+        refreshProducts(),
+        loadData() // Refresh settings/balances
       ]);
-      setSales(freshSales);
-      setProducts(freshProducts);
     } else {
       setSales(prev => [{ ...saleData, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);
       setProducts(prev => prev.map(p => {
         const cartItem = cart.find(i => i.id === p.id);
         return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
       }));
+      // Local fallback
+      const newSettings = {
+        ...appSettings,
+        cashBalance: (appSettings.cashBalance || 0) + cashDelta,
+        upiBalance: (appSettings.upiBalance || 0) + upiDelta
+      };
+      saveAppSettings(newSettings);
     }
 
     const changeInfo = paymentData.changeAmount > 0 
@@ -256,7 +292,14 @@ function POSContent() {
   return (
     <div className={`flex h-full ${dm ? 'bg-slate-950' : 'bg-slate-50'}`} style={{height:'calc(100vh - 64px)'}}>
       {/* Left Panel: Product Grid */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-4 gap-3">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6 gap-5">
+        <div className="flex justify-between items-end mb-2">
+          <div>
+            <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>POS Billing</h2>
+            <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Scan products or search to add to cart</p>
+          </div>
+        </div>
+
         {/* Search Bar */}
         <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
           <Scan className="w-5 h-5 text-slate-400 flex-shrink-0" />
@@ -271,9 +314,11 @@ function POSContent() {
           {search && (
             <button onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
           )}
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors">
-            <Plus className="w-3.5 h-3.5" /> Add
-          </button>
+          {(isAdminUnlocked || isOwner) && (
+            <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all active:scale-95">
+              <Plus className="w-3.5 h-3.5" /> Add
+            </button>
+          )}
         </div>
 
         {/* Product Grid */}
@@ -327,8 +372,8 @@ function POSContent() {
         <div className={`px-4 py-3 border-t space-y-1.5 ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
           <SummaryRow label="Subtotal" value={`₹${subtotal.toLocaleString()}`} dm={dm} />
           {discountAmount > 0 && <SummaryRow label="Discount" value={`-₹${discountAmount.toFixed(2)}`} valueClass="text-red-500" dm={dm} />}
-          <SummaryRow label="CGST (9%)" value={`₹${cgst.toFixed(2)}`} dm={dm} />
-          <SummaryRow label="SGST (9%)" value={`₹${sgst.toFixed(2)}`} dm={dm} />
+          <SummaryRow label={`CGST (${cgstPct}%)`} value={`₹${cgst.toFixed(2)}`} dm={dm} />
+          <SummaryRow label={`SGST (${sgstPct}%)`} value={`₹${sgst.toFixed(2)}`} dm={dm} />
           <div className={`pt-2 border-t flex justify-between items-center ${dm ? 'border-slate-700' : 'border-slate-200'}`}>
             <span className={`font-bold text-base ${dm ? 'text-white' : 'text-slate-800'}`}>Grand Total</span>
             <span className="text-2xl font-bold text-blue-600">₹{grandTotal.toFixed(2)}</span>

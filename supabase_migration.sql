@@ -43,12 +43,24 @@ CREATE TABLE IF NOT EXISTS cloud_products (
   synced_at   TIMESTAMPTZ DEFAULT now()
 );
 
--- Enable Row Level Security (optional, recommended)
+-- 4. Cloud Users
+CREATE TABLE IF NOT EXISTS cloud_users (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  local_id    INTEGER UNIQUE NOT NULL,
+  name        TEXT NOT NULL,
+  role        TEXT NOT NULL,
+  pin         TEXT NOT NULL,
+  synced_at   TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS
 ALTER TABLE cloud_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cloud_users ENABLE ROW LEVEL SECURITY;
 
--- Allow anon key full access (since POS uses anon key)
+-- Allow anon key full access
 CREATE POLICY "Allow all for anon" ON cloud_sales FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON cloud_expenses FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anon" ON cloud_products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for anon" ON cloud_users FOR ALL USING (true) WITH CHECK (true);

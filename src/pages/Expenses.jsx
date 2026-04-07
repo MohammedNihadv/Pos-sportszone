@@ -99,7 +99,7 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
 }
 
 export default function Expenses() {
-  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories, isOwner } = useApp();
+  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories, isOwner, loadData } = useApp();
   const dm = darkMode;
   const [modal, setModal] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
@@ -116,16 +116,37 @@ export default function Expenses() {
   const handleSave = async (entry) => {
     if (window.api) {
       const result = await window.api.saveExpense(entry);
+      
+      // Update account balances (decrement)
+      const updates = {};
+      const method = (entry.paymentMethod || 'Cash').toLowerCase();
+      if (method === 'cash') updates.cashBalance = -entry.amount;
+      else updates.upiBalance = -entry.amount;
+      
+      await window.api.incrementSettings(updates);
+      
       setExpenses(prev => [{ ...entry, id: result?.id || Date.now() }, ...prev]);
+      
+      // Refresh global app data to update balances in UI
+      await loadData();
     } else {
       setExpenses(prev => [{ ...entry, id: Date.now() }, ...prev]);
     }
     addToast(`Expense added: ₹${entry.amount.toLocaleString()}`, 'warning');
   };
 
-  const handleDelete = async (id, category) => {
+  const handleDelete = async (id, category, amount, method) => {
     if (window.api) {
       await window.api.deleteExpense(id);
+      
+      // Restore balance
+      const updates = {};
+      const pm = (method || 'Cash').toLowerCase();
+      if (pm === 'cash') updates.cashBalance = (amount || 0);
+      else updates.upiBalance = (amount || 0);
+      
+      await window.api.incrementSettings(updates);
+      await loadData();
     }
     setExpenses(prev => prev.filter(e => e.id !== id));
     addToast(`${category} expense removed`, 'info');
@@ -139,11 +160,11 @@ export default function Expenses() {
   const th = `px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Daily Expenses</h2>
-          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Daily Expenses</h2>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
         </div>
         {!isOwner && (
           <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
@@ -209,7 +230,7 @@ export default function Expenses() {
                           <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDelete(e.id, e.category)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                          <button onClick={() => handleDelete(e.id, e.category, e.amount, e.paymentMethod)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>

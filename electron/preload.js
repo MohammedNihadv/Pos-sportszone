@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('api', {
   getSystemHealth: () => ipcRenderer.invoke('get-system-health'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  incrementSettings: (updates) => ipcRenderer.invoke('increment-settings', updates),
 
   // ─── NEW: Logging & Audit ───
   getRecentLogs: () => ipcRenderer.invoke('get-recent-logs'),
@@ -80,4 +81,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // ─── NEW: Receipt Download ───
   downloadReceipt: (sale) => ipcRenderer.invoke('download-receipt', sale),
+  getReceiptPreview: (sale) => ipcRenderer.invoke('get-receipt-preview', sale),
+  copyToClipboard: (dataUrl) => ipcRenderer.invoke('copy-image-to-clipboard', dataUrl),
 });

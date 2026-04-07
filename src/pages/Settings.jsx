@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download } from 'lucide-react';
+import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download, Calculator } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Settings() {
@@ -37,11 +37,11 @@ export default function Settings() {
 
   const handleToggle = async (key) => {
     const newVal = !localSettings[key];
-    const updated = { ...localSettings, [key]: newVal };
-    setLocalSettings(updated);
-    // Immediately sync dark mode to the global context so UI re-renders
-    if (key === 'darkMode') setDarkMode(newVal);
-    await saveAppSettings(updated);
+    setLocalSettings(prev => ({ ...prev, [key]: newVal }));
+    
+    // Most robust: Only send the tiny delta to saveAppSettings
+    // This prevents stale keys in localSettings from overwriting other global settings
+    await saveAppSettings({ [key]: newVal });
   };
 
   // Category Management
@@ -111,6 +111,7 @@ export default function Settings() {
   const [pinChange, setPinChange] = useState({ userId: null, newPin: '', confirmPin: '' });
 
   const handleUpdatePin = async () => {
+    if (!pinChange.userId) return;
     if (!pinChange.newPin || pinChange.newPin.length !== 4) {
       addToast('PIN must be 4 digits', 'error');
       return;
@@ -120,17 +121,31 @@ export default function Settings() {
       return;
     }
 
-    if (window.api) {
-      const success = await window.api.updatePin({ userId: pinChange.userId, newPin: pinChange.newPin });
-      if (success) {
-        addToast('Security PIN updated successfully!', 'success');
-        setPinChange({ userId: null, newPin: '', confirmPin: '' });
-        // Refresh users in context
-        const freshUsers = await window.api.getUsers();
-        setUsers(freshUsers);
+    try {
+      if (window.api) {
+        const success = await window.api.updatePin({ 
+          userId: Number(pinChange.userId), 
+          newPin: pinChange.newPin 
+        });
+        
+        if (success) {
+          addToast('Security PIN updated successfully!', 'success');
+          setPinChange({ userId: null, newPin: '', confirmPin: '' });
+          // Refresh users in context immediately
+          const freshUsers = await window.api.getUsers();
+          setUsers(freshUsers);
+        } else {
+          addToast('Update failed. User ID not found.', 'error');
+        }
       } else {
-        addToast('Failed to update PIN', 'error');
+        // Browser Mode Fallback
+        setUsers(prev => prev.map(u => u.id === Number(pinChange.userId) ? { ...u, pin: pinChange.newPin } : u));
+        addToast('Browser Mode: Security PIN updated successfully!', 'success');
+        setPinChange({ userId: null, newPin: '', confirmPin: '' });
       }
+    } catch (err) {
+      addToast('System error updating PIN', 'error');
+      console.error(err);
     }
   };
 
@@ -153,9 +168,25 @@ export default function Settings() {
   const toggleCls = (enabled) => `relative w-12 h-6 rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-slate-300'} flex-shrink-0`;
   const thumbCls = (enabled) => `absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : ''}`;
 
+  if (!localSettings) {
+    return (
+      <div className="flex items-center justify-center h-full p-20 text-slate-500 font-medium italic">
+        <RefreshCw className="w-5 h-5 animate-spin mr-2" /> 
+        Loading preferences...
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 pb-32">
-      <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
+    <div className="p-6 pb-32 max-w-7xl mx-auto">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Settings</h2>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>System configuration, business identity and security controls</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
         
         {/* 
           ==============================
@@ -210,7 +241,7 @@ export default function Settings() {
           {/* Tax Configuration */}
           <div className={`${card} p-6`}>
             <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <div className="w-8 h-8 rounded-lg bg-emerald-600/10 flex items-center justify-center text-emerald-600 text-sm font-black">₹</div>
+               <div className="w-8 h-8 rounded-lg bg-emerald-600/10 flex items-center justify-center text-emerald-600 text-sm font-bold">₹</div>
                Tax Details
             </h3>
             <div className="grid grid-cols-2 gap-4">
@@ -219,6 +250,31 @@ export default function Settings() {
               </div>
               <div><label className={labelCls}>SGST %</label>
                  <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.sgstRate} onChange={(e) => !isOwner && setLocalSettings({...localSettings, sgstRate: e.target.value})} readOnly={isOwner} />
+              </div>
+            </div>
+          </div>
+
+          {/* Account Balances - NEW SECTION */}
+          <div className={`${card} p-6`}>
+            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+               <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center text-blue-600">
+                  <Calculator className="w-4 h-4" />
+               </div>
+               Account Balances
+            </h3>
+            <p className={`text-xs mb-4 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Manually adjust current system balances for accounting corrections.</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className={labelCls}>Cash Balance</label>
+                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cashBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, cashBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
+              </div>
+              <div>
+                <label className={labelCls}>UPI Balance</label>
+                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.upiBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, upiBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
+              </div>
+              <div>
+                <label className={labelCls}>Bank Balance</label>
+                <input type="number" className={`${inputCls} ${!isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.bankBalance || 0} onChange={(e) => isOwner && setLocalSettings({...localSettings, bankBalance: parseFloat(e.target.value) || 0})} readOnly={!isOwner} />
               </div>
             </div>
           </div>
@@ -510,15 +566,13 @@ export default function Settings() {
           >
             <LogOut className="w-4 h-4 shrink-0" /> Sign Out
           </button>
-          {!isOwner && (
-            <button
-              onClick={save}
-              style={{ minWidth: '160px', height: '44px' }}
-              className="shrink-0 px-5 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/30 active:scale-95 whitespace-nowrap"
-            >
-              <Save className="w-4 h-4 shrink-0" /> Save Preferences
-            </button>
-          )}
+          <button
+            onClick={save}
+            style={{ minWidth: '160px', height: '44px' }}
+            className="shrink-0 px-5 inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/30 active:scale-95 whitespace-nowrap"
+          >
+            <Save className="w-4 h-4 shrink-0" /> Save Preferences
+          </button>
         </div>
       </div>
     </div>

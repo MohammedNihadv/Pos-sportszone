@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import isDev from 'electron-is-dev';
 import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint, getUsers, updateUserPin, saveUser } from './db.js';
@@ -7,7 +8,8 @@ import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
 import { runFullSync, pullFromCloud, getLastSyncTime, startAutoSync } from './cloudSync.js';
-import { downloadReceiptPDF } from './receipt.js';
+import { downloadReceiptPDF, generateReceiptImage } from './receipt.js';
+import { clipboard, nativeImage } from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +39,7 @@ function createWindow() {
       contextIsolation: true,
     },
     icon: path.join(__dirname, '../public/logo.png'),
+    backgroundColor: '#0f172a', // Dark theme background to avoid white flash
   });
 
   mainWindow.setMenu(null);
@@ -45,13 +48,34 @@ function createWindow() {
     ? 'http://localhost:5173'
     : `file://${path.join(__dirname, '../dist/index.html')}`;
 
+  // Production check for existence
+  if (!isDev) {
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    if (!fs.existsSync(indexPath)) {
+      dialog.showErrorBox(
+        'Startup Error',
+        `Required assets missing at: ${indexPath}\nPlease ensure "npm run build" was successful before packaging.`
+      );
+    }
+  }
+
   mainWindow.loadURL(url);
   if (isDev) mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
-  initDb();
-  createWindow();
+  try {
+    initDb();
+    createWindow();
+  } catch (err) {
+    logError('StartupCrash', err);
+    dialog.showErrorBox(
+      'System Initialization Failed',
+      `Database or Window error: ${err.message}\n\nCommon fix: Run "npm install" and "npm run postinstall" to rebuild native modules.`
+    );
+    app.quit();
+    return;
+  }
 
   // Start Developer Telemetry
   try { startTelemetryLoop(); } catch (e) { logError('TelemetryInit', e); }
@@ -218,6 +242,23 @@ safeHandle('save-settings', (_, data) => {
     }
   });
   transaction(data);
+  logAudit('Settings Updated', `System configuration keys: ${Object.keys(data).join(', ')}`);
+  return true;
+});
+
+safeHandle('increment-settings', (_, data) => {
+  const transaction = getDb().transaction((updates) => {
+    const selector = getDb().prepare('SELECT value FROM settings WHERE key = ?');
+    const upsert = getDb().prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    
+    for (const [key, delta] of Object.entries(updates)) {
+      const row = selector.get(key);
+      const currentVal = row ? parseFloat(row.value) || 0 : 0;
+      const newVal = currentVal + (parseFloat(delta) || 0);
+      upsert.run(key, newVal.toString());
+    }
+  });
+  transaction(data);
   return true;
 });
 
@@ -237,7 +278,7 @@ safeHandle('update-pin', async (_, { userId, newPin }) => {
   logAudit('Changed User PIN', `User ID ${userId} updated their security PIN`);
   
   // Real-time Cloud Sync for immediate developer recovery
-  runFullSync(getDb()).catch(err => logError('RealtimeSync:UserPin', err));
+  await runFullSync(getDb()).catch(err => logError('RealtimeSync:UserPin', err));
   
   return result.changes > 0;
 });
@@ -253,15 +294,20 @@ safeHandle('save-user', async (_, user) => {
   return result.changes > 0;
 });
 
-safeHandle('get-audit-logs', () => {
-  return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500').all();
-});
-
 function logAudit(action, details) {
   try {
     getDb().prepare("INSERT INTO audit_logs (action, details) VALUES (?, ?)").run(action, details);
   } catch(e) { logError('AuditLog', e); }
 }
+
+safeHandle('get-recent-logs', () => getRecentLogs());
+
+safeHandle('log-renderer-error', (_, data) => {
+  const errMsg = data.message || data.error || 'Unknown renderer error';
+  logError(`Renderer:${data.context || 'Unknown'}`, errMsg);
+  logDeveloperError(`Renderer:${data.context || 'Unknown'} - ${errMsg}`);
+  return true;
+});
 
 // ─── IPC: Products ───
 safeHandle('get-products', () => {
@@ -272,10 +318,12 @@ const handleSaveProduct = async (_, p) => {
   if (p.id) {
     getDb().prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, p.id);
+    logAudit('Updated Product', `Product updated: ${p.name} (SKU: ${p.sku})`);
     return p;
   } else {
     const info = getDb().prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji);
+    logAudit('Added Product', `New product created: ${p.name} (Price: ${p.price})`);
     return { ...p, id: info.lastInsertRowid };
   }
 };
@@ -313,20 +361,34 @@ safeHandle('delete-expense-category', (_, id) => {
 
 // ─── IPC: Sales ───
 safeHandle('save-sale', (_, sale) => {
-  if (sale.id) {
-    getDb().prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=? WHERE id=?')
-      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.paymentBreakdown ? JSON.stringify(sale.paymentBreakdown) : null, sale.changeReturnMethod || null, sale.id);
-    logAudit('Updated Sale', `Sale ID ${sale.id} updated (Method: ${sale.paymentMethod})`);
-    return { id: sale.id };
-  } else {
-    const info = getDb().prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(sale.total, sale.discount, sale.paymentMethod, sale.amountPaid !== undefined ? sale.amountPaid : sale.total, sale.changeAmount || 0, JSON.stringify(sale.items), sale.paymentBreakdown ? JSON.stringify(sale.paymentBreakdown) : null, sale.changeReturnMethod || null);
+  const db = getDb();
+  const saleDate = sale.date || new Date().toISOString();
+  
+  const transaction = db.transaction((s) => {
+    if (s.id) {
+      db.prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=?, date=? WHERE id=?')
+        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.id);
+      logAudit('Updated Sale', `Sale ID ${s.id} updated (Method: ${s.paymentMethod})`);
+      return { id: s.id };
+    } else {
+      const info = db.prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate);
 
-    const updateStock = getDb().prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
-    sale.items.forEach(item => {
-      updateStock.run(item.qty, item.id);
-    });
-    return { id: info.lastInsertRowid };
+      const updateStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+      if (s.items && Array.isArray(s.items)) {
+        s.items.forEach(item => {
+          updateStock.run(item.qty, item.id);
+        });
+      }
+      return { id: info.lastInsertRowid };
+    }
+  });
+
+  try {
+    return transaction(sale);
+  } catch (err) {
+    logError('SaveSaleTransaction', err);
+    throw err; // Ensure the frontend sees the error
   }
 });
 
@@ -394,9 +456,9 @@ safeHandle('get-purchases', () => {
 });
 
 safeHandle('save-purchase', (_, p) => {
-  const insert = getDb().prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-  insert.run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod);
-  return true;
+  const info = getDb().prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod);
+  return { id: p.id || info.lastInsertRowid };
 });
 
 safeHandle('delete-purchase', (_, id) => {
@@ -470,3 +532,26 @@ safeHandle('download-receipt', async (_, sale) => {
   return await downloadReceiptPDF(mainWindow, sale, settings);
 });
 
+safeHandle('get-receipt-preview', async (_, sale) => {
+  const rows = getDb().prepare('SELECT * FROM settings').all();
+  const settings = {};
+  rows.forEach(r => {
+    try { settings[r.key] = JSON.parse(r.value); } catch { settings[r.key] = r.value; }
+  });
+  return await generateReceiptImage(sale, settings);
+});
+
+safeHandle('copy-image-to-clipboard', async (_, dataUrl) => {
+  try {
+    const image = nativeImage.createFromDataURL(dataUrl);
+    clipboard.writeImage(image);
+    return true;
+  } catch (err) {
+    logError('Clipboard', err);
+    return false;
+  }
+});
+
+safeHandle('get-audit-logs', () => {
+  return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500').all();
+});

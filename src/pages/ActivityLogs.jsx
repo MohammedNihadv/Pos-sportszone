@@ -30,13 +30,13 @@ export default function ActivityLogs() {
   };
 
   return (
-    <div className={`p-6 max-w-5xl mx-auto h-full flex flex-col ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+    <div className={`p-6 max-w-7xl mx-auto pb-20 h-full flex flex-col ${darkMode ? 'text-white' : 'text-slate-800'}`}>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+        <h2 className={`text-3xl font-bold tracking-tight flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
           <Activity className="w-6 h-6 text-blue-500" />
           Owner Audit Logs
-        </h1>
-        <p className={`text-sm mt-1 mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+        </h2>
+        <p className={`text-sm mt-1.5 font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
           A secure, immutable record of important system actions and deletions.
         </p>
       </div>

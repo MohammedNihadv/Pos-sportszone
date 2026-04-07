@@ -133,6 +133,30 @@ async function syncCategories(db) {
   return { table: 'categories', synced: rows.length };
 }
 
+async function syncPurchases(db) {
+  const rows = db.prepare('SELECT * FROM purchases ORDER BY id').all();
+  if (rows.length === 0) return { table: 'purchases', synced: 0 };
+
+  const payload = rows.map(r => ({
+    local_id: r.id,
+    date: r.date,
+    supplier: r.supplier,
+    invoice: r.invoice || '',
+    items_count: r.items_count || 0,
+    total: r.total || 0,
+    paid: r.paid || 0,
+    status: r.status || 'pending',
+    payment_method: r.payment_method || 'cash'
+  }));
+
+  const { error } = await supabase
+    .from('cloud_purchases')
+    .upsert(payload, { onConflict: 'local_id' });
+
+  if (error) throw new Error(`cloud_purchases upsert failed: ${error.message}`);
+  return { table: 'purchases', synced: rows.length };
+}
+
 async function syncUsers(db) {
   const rows = db.prepare('SELECT * FROM users ORDER BY id').all();
   if (rows.length === 0) return { table: 'users', synced: 0 };
@@ -163,7 +187,16 @@ export async function runFullSync(db) {
     { name: 'products', fn: syncProducts },
     { name: 'suppliers', fn: syncSuppliers },
     { name: 'categories', fn: syncCategories },
-    { name: 'users', fn: syncUsers }
+    { name: 'purchases', fn: syncPurchases },
+    { name: 'users', fn: syncUsers },
+    { name: 'audit_logs', fn: async (db) => {
+      const rows = db.prepare('SELECT * FROM audit_logs ORDER BY id').all();
+      if (rows.length === 0) return { table: 'audit_logs', synced: 0 };
+      const payload = rows.map(r => ({ local_id: r.id, user_role: r.user_role, action: r.action, details: r.details, timestamp: r.timestamp }));
+      const { error } = await supabase.from('cloud_audit_logs').upsert(payload, { onConflict: 'local_id' });
+      if (error) throw error;
+      return { table: 'audit_logs', synced: rows.length };
+    }}
   ];
 
   for (const task of syncTasks) {
@@ -193,6 +226,7 @@ export async function pullFromCloud(db) {
     { local: 'products', cloud: 'cloud_products' },
     { local: 'expenses', cloud: 'cloud_expenses' },
     { local: 'sales', cloud: 'cloud_sales' },
+    { local: 'purchases', cloud: 'cloud_purchases' },
     { local: 'users', cloud: 'cloud_users' }
   ];
 

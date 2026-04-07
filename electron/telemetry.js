@@ -84,7 +84,8 @@ export const logDeveloperError = async (errorMessage) => {
     const logData = {
       device_id: deviceId,
       app_version: app.getVersion(),
-      error_message: errorMessage ? errorMessage.toString() : 'Unknown Error'
+      error_message: errorMessage ? errorMessage.toString() : 'Unknown Error',
+      occurred_at: new Date().toISOString()
     };
     
     await supabase.from('developer_logs').insert([logData]);

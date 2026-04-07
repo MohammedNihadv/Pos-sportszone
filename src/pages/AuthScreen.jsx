@@ -92,7 +92,7 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
           <div className="w-24 h-24 mx-auto mb-4 p-1 bg-white/5 rounded-3xl backdrop-blur-md border border-white/10 flex items-center justify-center shadow-2xl shadow-blue-500/20 overflow-hidden">
             <img src="./logo.png" alt="Sports Zone" className="w-full h-full object-cover rounded-2xl" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Sports Zone</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Sports Zone</h1>
           <p className="text-blue-300/70 text-sm mt-1">
             {onLockMode ? 'Session Locked — Enter PIN to resume' : 'Enter your PIN to get started'}
           </p>

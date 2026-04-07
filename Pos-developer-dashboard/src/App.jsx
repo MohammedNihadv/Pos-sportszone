@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
-import { Activity, AlertTriangle, MonitorPlay, CheckCircle2, Box, LogIn, Database, ShieldAlert, Cpu, Power, Trash2, X } from 'lucide-react';
+import { Activity, AlertTriangle, MonitorPlay, CheckCircle2, Box, LogIn, Database, ShieldAlert, Cpu, Power, Trash2, X, Users, History, Lock, Eye, EyeOff, Terminal } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
 
 function App() {
   const [authPin, setAuthPin] = useState('');
@@ -15,7 +15,11 @@ function App() {
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [revenue, setRevenue] = useState(0);
-  const [syncStatus, setSyncStatus] = useState({ sales: 0 });
+  const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [showPins, setShowPins] = useState(false);
+  const [activeTab, setActiveTab] = useState('telemetry'); // 'telemetry' | 'logs' | 'users'
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Modals
   const [selectedDevice, setSelectedDevice] = useState(null);
@@ -38,10 +42,6 @@ function App() {
     if (authPin === 'SZADMIN2026') { 
       setIsAuthenticated(true);
       localStorage.setItem('developer_auth', 'verified');
-      setTimeout(() => {
-        localStorage.removeItem('developer_auth');
-        setIsAuthenticated(false);
-      }, 2 * 60 * 60 * 1000); // 2 hours
     } else {
       alert('Security violation: Invalid authentication PIN.');
     }
@@ -50,28 +50,42 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('developer_auth');
     setIsAuthenticated(false);
-  }
+    setAuthPin('');
+    setShowLogoutConfirm(false);
+  };
 
-  const fetchTelemetry = async () => {
-    setLoading(true);
+  const fetchTelemetry = async (target = 'all') => {
+    // Only show loading on initial full load to prevent "jitters" during background sync
+    if (target === 'all') setLoading(true);
+    
     try {
-      const [devicesRes, errorsRes, salesRes] = await Promise.all([
-        supabase.from('device_telemetry').select('*').order('last_seen', { ascending: false }),
-        supabase.from('developer_logs').select('*').order('occurred_at', { ascending: false }).limit(50),
-        supabase.from('cloud_sales').select('total')
-      ]);
-      
-      if (devicesRes.data) setDevices(devicesRes.data);
-      if (errorsRes.data) setErrors(errorsRes.data);
-      if (salesRes.data) {
-        const sum = salesRes.data.reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0);
-        setRevenue(sum);
-        setSyncStatus({ sales: salesRes.data.length });
+      if (target === 'all' || target === 'device_telemetry') {
+        const { data } = await supabase.from('device_telemetry').select('*').order('last_seen', { ascending: false });
+        if (data) setDevices(data);
+      }
+      if (target === 'all' || target === 'developer_logs') {
+        const { data } = await supabase.from('developer_logs').select('*').order('occurred_at', { ascending: false }).limit(50);
+        if (data) setErrors(data);
+      }
+      if (target === 'all' || target === 'cloud_sales') {
+        const { data } = await supabase.from('cloud_sales').select('total');
+        if (data) {
+          const sum = data.reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0);
+          setRevenue(sum);
+        }
+      }
+      if (target === 'all' || target === 'cloud_users') {
+        const { data } = await supabase.from('cloud_users').select('*').order('role', { ascending: false });
+        if (data) setUsers(data);
+      }
+      if (target === 'all' || target === 'cloud_audit_logs') {
+        const { data } = await supabase.from('cloud_audit_logs').select('*').order('timestamp', { ascending: false }).limit(100);
+        if (data) setAuditLogs(data);
       }
     } catch (e) {
       console.warn("Fetch issue:", e);
     }
-    setLoading(false);
+    if (target === 'all') setLoading(false);
   };
 
   const triggerForceAction = async (deviceId, action) => {
@@ -94,277 +108,454 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-slate-700">
-          <div className="flex justify-center mb-6">
-            <div className="p-4 bg-blue-500/10 rounded-full"><ShieldAlert className="w-12 h-12 text-blue-500" /></div>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-emerald-600/10 rounded-full blur-[120px]"></div>
+        
+        <form onSubmit={handleLogin} className="bg-slate-900/40 backdrop-blur-xl p-10 rounded-[2rem] shadow-2xl max-w-md w-full border border-slate-700/50 relative z-10">
+          <div className="flex justify-center mb-8">
+            <div className="p-5 bg-gradient-to-tr from-blue-600 to-emerald-500 rounded-3xl shadow-lg shadow-blue-900/20">
+              <ShieldAlert className="w-12 h-12 text-white" />
+            </div>
           </div>
-          <h2 className="text-2xl font-bold text-white text-center mb-2">Restricted Access</h2>
-          <p className="text-slate-400 text-center text-sm mb-6">Telemetrik monitoring is for authorized personnel only.</p>
-          <input 
-            type="password" placeholder="Enter System PIN" required
-            className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white mb-4 shadow-inner focus:outline-none focus:border-blue-500"
-            value={authPin} onChange={e => setAuthPin(e.target.value)}
-          />
-          <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors">
-            <LogIn className="w-5 h-5" /> Authenticate
-          </button>
+          <h2 className="text-3xl font-bold text-white text-center mb-2 tracking-tight">Developer Access Protocol</h2>
+          <p className="text-slate-400 text-center text-sm mb-8 font-medium">Internal Telemetrik Monitoring Environment</p>
+          
+          <div className="space-y-4">
+            <div className="relative group">
+              <Lock className="absolute left-4 top-4 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+              <input 
+                type="password" placeholder="System Security Passcode" required
+                className="w-full pl-12 pr-4 py-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 transition-all text-lg tracking-normal hover:bg-slate-800/60"
+                value={authPin} onChange={e => setAuthPin(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold rounded-2xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-900/40 relative overflow-hidden group border border-blue-500/20">
+              <span className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></span>
+              <LogIn className="w-5 h-5 relative z-10" /> <span className="relative z-10 text-sm tracking-wide">Sign In to Telemetrik</span>
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-600 text-center mt-8 uppercase font-bold tracking-[0.1em]">Target: sportszone-pos-main-v3</p>
         </form>
       </div>
     );
   }
 
-  // Metrics Logic
   const oneDayAgo = new Date(); oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
-  const activeDevices = devices.filter(d => new Date(d.last_seen) > oneDayAgo);
-  const recentInstalls = devices.filter(d => new Date(d.created_at || d.last_seen) > sevenDaysAgo);
-  
   const versionMap = devices.reduce((acc, current) => {
-    const v = current.app_version || 'Unknown';
+    const v = current.app_version || 'v1.0.0';
     acc[v] = (acc[v] || 0) + 1;
     return acc;
   }, {});
-  
   const versionData = Object.keys(versionMap).map(key => ({ name: key, value: versionMap[key] }));
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-8 relative">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-10 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-              <MonitorPlay className="w-8 h-8 text-blue-600" />
-              Telemetrik Dashboard
-            </h1>
-            <p className="text-slate-500 mt-1">Authorized deployment monitoring active.</p>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={fetchTelemetry} disabled={loading} className="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium hover:bg-slate-50">
-              Refresh Data
-            </button>
-            <button onClick={handleLogout} className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 shadow-sm rounded-lg text-sm font-bold hover:bg-red-100">
-              Logout
-            </button>
-          </div>
-        </header>
-
-        {/* Top Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Box className="w-6 h-6" /></div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Total Installs</p>
-              <h3 className="text-2xl font-bold leading-none mt-1">{devices.length}</h3>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100 pb-20">
+      
+      {/* Premium Navigation Header */}
+      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-10">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-200">
+                <MonitorPlay className="w-6 h-6 text-white" />
+              </div>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Telemetrik<span className="text-blue-600">.</span></h1>
+            </div>
+            
+            <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl">
+              {[
+                { id: 'telemetry', label: 'Monitor', icon: Activity },
+                { id: 'logs', label: 'Audit', icon: History },
+                { id: 'users', label: 'Staffing', icon: Users },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all
+                    ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Activity className="w-6 h-6" /></div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Active (24h)</p>
-              <h3 className="text-2xl font-bold leading-none mt-1">{activeDevices.length}</h3>
-            </div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-             <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">₹</div>
-             <div>
-               <p className="text-xs font-semibold uppercase text-slate-400">Cross-Device Rev</p>
-               <h3 className="text-2xl font-bold leading-none mt-1">₹{revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</h3>
+          
+          <div className="flex items-center gap-4">
+             <div className="text-right hidden sm:block">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Security Status</p>
+               <p className="text-emerald-500 text-xs font-bold flex items-center gap-1.5 justify-end mt-1">
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Encrypted Link
+               </p>
              </div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-             <div className="p-3 bg-sky-50 text-sky-600 rounded-xl"><Database className="w-5 h-5" /></div>
-             <div>
-               <p className="text-xs font-semibold uppercase text-slate-400">Cloud Syncs</p>
-               <h3 className="text-2xl font-bold leading-none mt-1">{syncStatus.sales} Recs</h3>
-             </div>
+             <button 
+               id="logout-btn"
+               onClick={() => setShowLogoutConfirm(true)}
+               className="h-10 w-10 min-w-[40px] rounded-full bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 border-2 border-white shadow-sm transition-all flex items-center justify-center font-bold text-xs relative z-[100]"
+               title="Sign Out"
+             >
+               <Power className="w-4 h-4" />
+             </button>
           </div>
         </div>
+      </nav>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left Column */}
-          <div className="col-span-1 border border-slate-100 rounded-2xl bg-white p-6 shadow-sm flex flex-col justify-center">
-            <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase tracking-wider">Version Analytics</h3>
-            {versionData.length > 0 ? (
-              <div className="h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={versionData} innerRadius={50} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {versionData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <RechartsTooltip />
-                    <Legend verticalAlign="bottom" height={36}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : <div className="text-center text-slate-400 py-10 text-sm">No version data</div>}
-            
-            <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-sm">
-               <span className="text-slate-500 font-medium">New Installs (7d):</span>
-               <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">+{recentInstalls.length}</span>
-            </div>
-          </div>
-
-          {/* Middle & Right columns: Logs and Devices */}
-          <div className="col-span-1 md:col-span-2 space-y-6">
-            
-            {/* Device Roster */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-slate-50">
-                <h2 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Active Deployments Roster</h2>
-              </div>
-              <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-500 bg-slate-50 sticky top-0">
-                      <th className="p-4 font-medium">Device ID</th>
-                      <th className="p-4 font-medium">Hostname</th>
-                      <th className="p-4 font-medium">Version</th>
-                      <th className="p-4 font-medium text-right">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {devices.map(device => {
-                      const isOnline = new Date(device.last_seen) > oneDayAgo;
-                      return (
-                        <tr key={device.machine_id || device.id} onClick={() => setSelectedDevice(device)} className="cursor-pointer border-b border-slate-50 hover:bg-blue-50 transition-colors">
-                          <td className="p-4 font-mono text-xs text-slate-500">{(device.machine_id || '').substring(0,8)}...</td>
-                          <td className="p-4 font-bold text-blue-600">{device.hostname || 'Unknown'}</td>
-                          <td className="p-4"><span className="px-2 py-1 bg-slate-100 rounded text-xs font-mono font-medium">{device.app_version}</span></td>
-                          <td className="p-4 text-right">
-                            {device.force_action ? (
-                               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold uppercase tracking-wide">
-                                  {device.force_action} PENDING
-                               </span>
-                            ) : isOnline ? (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
-                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Active
-                               </span>
-                            ) : (
-                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
-                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Offline
-                               </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Error Logs */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-[300px] flex flex-col">
-              <div className="p-4 border-b border-slate-100 bg-amber-50 flex items-center justify-between">
-                <div className="flex gap-2 items-center">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <h2 className="font-bold text-amber-800 text-sm tracking-wide uppercase">Crash Watch Tower</h2>
+      <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-10 animate-fade-in">
+        
+        {/* Core Metrics Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+           {[
+             { label: 'Cloud Installs', val: devices.length, icon: Box, color: 'blue' },
+             { label: 'Active Targets', val: devices.filter(d => new Date(d.last_seen) > oneDayAgo).length, icon: Activity, color: 'emerald' },
+             { label: 'Global Revenue', val: `₹${revenue.toLocaleString('en-IN')}`, icon: Database, color: 'indigo' },
+             { label: 'Critical Errors', val: errors.length, icon: AlertTriangle, color: 'amber' },
+           ].map(stat => (
+             <div key={stat.label} className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-5 group hover:shadow-md transition-all">
+                <div className={`p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-bold text-amber-600">{errors.length} Recorded</span>
-              </div>
-              <div className="p-4 overflow-y-auto flex-1 space-y-2">
-                {errors.length === 0 ? (
-                  <div className="text-center py-10 flex flex-col items-center">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-2" />
-                    <p className="text-slate-500 font-medium">Zero crashes reported! Good job.</p>
-                  </div>
-                ) : (
-                  errors.map(err => (
-                    <div key={err.id} onClick={() => setSelectedError(err)} className="cursor-pointer p-3 bg-red-50/50 hover:bg-red-50 border border-red-100 rounded-xl transition-colors">
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-bold text-red-800 truncate">{err.error_message}</p>
-                        <span className="text-xs text-slate-500 ml-4 font-medium whitespace-nowrap">{new Date(err.occurred_at).toLocaleDateString()}</span>
+                <div>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                   <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{stat.val}</h3>
+                </div>
+             </div>
+           ))}
+        </div>
+
+        {/* --- MONITOR TAB --- */}
+        {activeTab === 'telemetry' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+             
+             {/* Left Column (40%) */}
+             <div className="lg:col-span-4 space-y-10">
+                <section className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                   <div className="p-8 border-b border-slate-50 bg-slate-50/50">
+                      <h3 className="text-lg font-bold text-slate-900 tracking-tight">Version Analytics</h3>
+                      <p className="text-xs text-slate-500 mt-1 font-medium italic opacity-70">Global firmware distribution</p>
+                   </div>
+                   <div className="p-6">
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                             <Pie data={versionData} innerRadius={60} outerRadius={85} paddingAngle={2} dataKey="value" animationDuration={1500}>
+                               {versionData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
+                             </Pie>
+                             <RechartsTooltip contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 20px -5px rgba(0,0,0,0.1)' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </div>
+                      <div className="grid grid-cols-2 gap-4 mt-4">
+                         {versionData.map((v, i) => (
+                           <div key={v.name} className="flex items-center gap-2">
+                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                             <span className="text-xs font-bold text-slate-600">{v.name}: {v.value}</span>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                </section>
+                
+                {/* Visual Watch Tower Block */}
+                <section className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden group">
+                   <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-amber-500/10 rounded-full blur-[60px] group-hover:bg-amber-500/20 transition-all duration-700"></div>
+                   <div className="relative z-10">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-amber-500 text-slate-900 rounded-lg"><Terminal className="w-4 h-4" /></div>
+                        <h3 className="text-xs font-bold tracking-[0.2em] text-amber-500">Live Watch Tower</h3>
+                      </div>
+                      <p className="text-3xl font-bold mb-2">{errors.length}</p>
+                      <p className="text-xs text-slate-400 font-medium leading-relaxed">System crashes or renderer failure reports across the whole network.</p>
+                      <button 
+                        onClick={() => setActiveTab('logs')}
+                        className="mt-8 text-[11px] font-bold py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors shadow-lg active:scale-95"
+                      >
+                        Inspect Error Stack
+                      </button>
+                   </div>
+                </section>
+             </div>
+
+             {/* Right Column (60%) */}
+             <div className="lg:col-span-8 space-y-10">
+                <section className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
+                       <div>
+                         <h3 className="text-lg font-bold text-slate-900 tracking-tight">Global Node Roster</h3>
+                         <p className="text-xs text-slate-500 mt-1 font-medium italic opacity-70">Live tracking of active machines</p>
+                       </div>
+                       <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">Live Refresh</span>
                     </div>
-                  ))
-                )}
-              </div>
+                   <div className="overflow-x-auto min-h-[400px]">
+                      <table className="w-full text-sm text-left border-collapse">
+                         <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                            <tr>
+                               <th className="px-8 py-5 font-bold">Node Identity</th>
+                               <th className="px-8 py-5 font-bold">Firmware</th>
+                               <th className="px-8 py-5 text-right font-bold">Status</th>
+                               <th className="px-8 py-5 text-center font-bold w-20">Manage</th>
+                            </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-50">
+                            {devices.map(d => {
+                              const online = new Date(d.last_seen) > oneDayAgo;
+                              return (
+                                <tr key={d.machine_id} onClick={() => setSelectedDevice(d)} className="hover:bg-blue-50/30 cursor-pointer transition-colors group">
+                                   <td className="px-8 py-5">
+                                      <div className="flex items-center gap-3">
+                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${online ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                                            {d.hostname?.charAt(0) || '?'}
+                                         </div>
+                                          <div>
+                                             <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-[13px]">{d.hostname || 'Anonymous Node'}</p>
+                                             <p className="text-[10px] font-mono text-slate-400 mt-0.5 opacity-80 uppercase tracking-tight">HWID: {d.machine_id?.substring(0,8)}</p>
+                                          </div>
+                                      </div>
+                                   </td>
+                                   <td className="px-8 py-5">
+                                      <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-bold shadow-sm tracking-widest">
+                                         V.{d.app_version || '1.0'}
+                                      </span>
+                                   </td>
+                                   <td className="px-8 py-5 text-right">
+                                      {d.force_action ? (
+                                        <div className="inline-flex flex-col items-end">
+                                           <span className="text-[9px] font-bold text-red-500 uppercase mb-1 tracking-wider">Command Sent</span>
+                                           <span className="px-2 py-1 rounded-md bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest">{d.force_action}</span>
+                                        </div>
+                                      ) : online ? (
+                                        <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase rounded-full border border-emerald-100 tracking-widest">
+                                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                           Connected
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-500 text-[10px] font-bold uppercase rounded-full tracking-widest">
+                                           Offline
+                                        </span>
+                                      )}
+                                   </td>
+                                   <td className="px-8 py-5 text-center">
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm("Permanently decommission this node?")) {
+                                            supabase.from('device_telemetry').delete().eq('machine_id', d.machine_id).then(() => fetchTelemetry());
+                                          }
+                                        }}
+                                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                        title="Delete Node"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                   </td>
+                                </tr>
+                              )
+                            })}
+                         </tbody>
+                      </table>
+                      {devices.length === 0 && <div className="p-20 text-center text-slate-400 font-bold">Initializing deployment data link...</div>}
+                   </div>
+                </section>
+             </div>
+          </div>
+        )}
+
+        {/* --- STAFFING TAB --- */}
+        {activeTab === 'users' && (
+          <div className="space-y-8 animate-slide-up">
+            <div className="flex justify-between items-end">
+               <div>
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">Personnel Roster</h2>
+                  <p className="text-slate-500 mt-1 font-medium">Synced credential management for all terminal operators.</p>
+               </div>
+                <button 
+                   onClick={() => setShowPins(!showPins)}
+                   className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-bold transition-all border-2
+                     ${showPins ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-sm' : 'bg-slate-900 text-white border-slate-900 shadow-md'}`}
+                >
+                   {showPins ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                   {showPins ? "Secure Tokens" : "Reveal Tokens"}
+                </button>
             </div>
 
-          </div>
-        </div>
-      </div>
-
-      {/* DEVICE DRILLDOWN MODAL */}
-      {selectedDevice && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-200">
-             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-               <h3 className="font-bold text-lg flex items-center gap-2"><Cpu className="text-blue-500 w-5 h-5"/> Device Target: {selectedDevice.hostname}</h3>
-               <button onClick={() => setSelectedDevice(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-             </div>
-             <div className="p-6">
-                <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                     <p className="text-slate-400 text-xs font-semibold mb-1">Architecture / OS</p>
-                     <p className="font-mono text-slate-800">{selectedDevice.os || 'Unknown'}</p>
-                   </div>
-                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                     <p className="text-slate-400 text-xs font-semibold mb-1">POS Firmware</p>
-                     <p className="font-mono font-bold text-blue-600">v{selectedDevice.app_version}</p>
-                   </div>
-                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                     <p className="text-slate-400 text-xs font-semibold mb-1">Last Heartbeat</p>
-                     <p className="font-mono text-slate-800">{new Date(selectedDevice.last_seen).toLocaleString()}</p>
-                   </div>
-                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                     <p className="text-slate-400 text-xs font-semibold mb-1">Machine HWID</p>
-                     <p className="font-mono text-xs text-slate-500 break-all">{selectedDevice.machine_id}</p>
-                   </div>
-                </div>
-
-                <div className="p-4 bg-red-50/50 border-2 border-red-100 border-dashed rounded-xl">
-                  <h4 className="font-bold text-red-800 flex items-center gap-2 mb-3"><Power className="w-4 h-4"/> Remote Force Actions</h4>
-                  {selectedDevice.force_action ? (
-                     <div className="p-3 bg-red-100 text-red-800 rounded flex items-center justify-between">
-                       <span className="font-bold text-sm">PENDING: {selectedDevice.force_action}</span>
-                       <button onClick={() => clearAction(selectedDevice.machine_id)} className="text-xs bg-white px-2 py-1 rounded border border-red-200">Cancel Queue</button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               {users.map(u => (
+                  <div key={u.id} className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm relative group hover:shadow-md transition-all">
+                     <div className={`absolute top-6 right-6 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest
+                       ${u.role === 'Owner' ? 'bg-amber-100 text-amber-700' : u.role === 'Admin' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                       {u.role}
                      </div>
-                  ) : (
-                    <div className="flex gap-3">
-                      <button onClick={() => triggerForceAction(selectedDevice.machine_id, 'disable')} className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-sm transition">
-                        Kill Device Executable
-                      </button>
-                      <button onClick={() => triggerForceAction(selectedDevice.machine_id, 'update')} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-sm shadow-sm transition">
-                        Force FW Update
-                      </button>
-                    </div>
-                  )}
-                </div>
-             </div>
+
+                     <div className="flex items-center gap-5 mt-4">
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner
+                          ${u.role === 'Owner' ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                           {u.name.charAt(0)}
+                        </div>
+                         <div>
+                            <p className="text-xl font-bold text-slate-900 tracking-tight">{u.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest opacity-60">Terminal Operator</p>
+                         </div>
+                     </div>
+
+                     <div className="mt-10 p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Access Token</span>
+                        <span className={`text-xl font-bold font-mono transition-all duration-300 ${showPins ? 'text-blue-600' : 'blur-md opacity-20'}`}>
+                           {u.pin || '****'}
+                        </span>
+                     </div>
+                  </div>
+               ))}
+               {users.length === 0 && <div className="col-span-full py-20 text-center font-bold text-slate-400">Fetching personnel data from cloud link...</div>}
+            </div>
           </div>
+        )}
+
+        {/* --- AUDIT TAB --- */}
+        {activeTab === 'logs' && (
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden min-h-[600px] flex flex-col">
+                <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10 shadow-sm">
+                   <div>
+                     <h3 className="text-lg font-bold text-slate-900 tracking-tight">Global Event Stream</h3>
+                     <p className="text-xs text-slate-500 mt-1 font-medium italic opacity-70">Forensic audit trail of all deployments</p>
+                   </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={async () => {
+                        if (window.confirm("CRITICAL: Wipe entire cloud audit trail? This cannot be undone.")) {
+                          await supabase.from('cloud_audit_logs').delete().neq('id', 0);
+                          fetchTelemetry();
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Clear Audit Trail
+                    </button>
+                  </div>
+               </div>
+               
+               <div className="flex-1 overflow-x-auto">
+                 <table className="w-full text-left text-sm">
+                   <thead className="bg-slate-50/30 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                     <tr>
+                       <th className="px-8 py-4">Timeline</th>
+                       <th className="px-8 py-4">Action Target</th>
+                       <th className="px-8 py-4">Actor Role</th>
+                       <th className="px-8 py-4">Details Fragment</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-50">
+                     {auditLogs.map(l => (
+                       <tr key={l.id} className="hover:bg-slate-50/50 group">
+                         <td className="px-8 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                            {new Date(l.timestamp).toLocaleString()}
+                         </td>
+                         <td className="px-8 py-5">
+                            <span className="text-xs font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors">
+                               {l.action}
+                            </span>
+                         </td>
+                         <td className="px-8 py-5">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider
+                              ${l.user_role === 'Owner' ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
+                               {l.user_role}
+                            </span>
+                         </td>
+                         <td className="px-8 py-5 text-xs text-slate-500 italic max-w-sm truncate">
+                            {l.details}
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* DEVICE MODAL REDESIGN */}
+      {selectedDevice && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden border border-white/20 animate-scale-up">
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                 <div className="flex items-center gap-4">
+                     <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-200"><Cpu className="w-6 h-6" /></div>
+                     <div>
+                        <h3 className="text-lg font-bold tracking-tight">{selectedDevice.hostname || 'Node Link'}</h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 opacity-70">Hardware ID Trace</p>
+                     </div>
+                 </div>
+                 <button onClick={() => setSelectedDevice(null)} className="p-2 hover:bg-slate-200 rounded-xl transition-colors"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="p-8 space-y-8">
+                 <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { l: 'Architecture', v: selectedDevice.os || 'X86-64' },
+                      { l: 'FW Version', v: `Stable v${selectedDevice.app_version}` },
+                      { l: 'Last Active', v: new Date(selectedDevice.last_seen).toLocaleTimeString() },
+                      { l: 'Node Hash', v: selectedDevice.machine_id?.substring(0,10) },
+                    ].map(i => (
+                      <div key={i.l} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{i.l}</p>
+                         <p className="text-xs font-bold text-slate-800 font-mono italic">{i.v}</p>
+                      </div>
+                    ))}
+                 </div>
+
+                 <div className="p-6 bg-red-50 border-2 border-red-100 rounded-3xl">
+                    <h4 className="text-[10px] font-bold text-red-700 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                       <Power className="w-4 h-4" /> Remote Command Injection
+                    </h4>
+                    {selectedDevice.force_action ? (
+                       <div className="p-4 bg-white/80 rounded-2xl flex items-center justify-between shadow-sm">
+                          <span className="font-bold text-red-600 uppercase text-xs">Awaiting Heartbeat: {selectedDevice.force_action}</span>
+                          <button onClick={() => clearAction(selectedDevice.machine_id)} className="text-[10px] font-bold uppercase py-2 px-4 border-2 border-red-100 rounded-xl hover:bg-red-50 text-red-600 transition-all">Abort</button>
+                       </div>
+                    ) : (
+                     <div className="flex gap-4">
+                        <button onClick={() => triggerForceAction(selectedDevice.machine_id, 'disable')} className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-xs transition-all shadow-lg shadow-red-200">Kill Node</button>
+                        <button onClick={() => triggerForceAction(selectedDevice.machine_id, 'update')} className="flex-1 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-xs transition-all shadow-lg shadow-amber-200">Force Reboot</button>
+                     </div>
+                    )}
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 
-      {/* ERROR DRILLDOWN MODAL */}
-      {selectedError && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200">
-             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-red-50">
-               <h3 className="font-bold text-lg text-red-800 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Error Trace</h3>
-               <button onClick={() => setSelectedError(null)} className="text-red-400 hover:text-red-600"><X className="w-5 h-5" /></button>
-             </div>
-             <div className="p-6">
-                <p className="font-mono text-sm bg-slate-900 text-emerald-400 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[300px]">
-                  {selectedError.error_message}
-                </p>
-                <div className="mt-4 flex justify-between items-end border-t border-slate-100 pt-4">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Occurred On</p>
-                    <p className="font-mono text-sm text-slate-800">{new Date(selectedError.occurred_at).toLocaleString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Target Version</p>
-                    <p className="font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded inline-block">v{selectedError.app_version}</p>
-                  </div>
-                </div>
-             </div>
-          </div>
+      {/* Professional Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in" onClick={() => setShowLogoutConfirm(false)}></div>
+           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200 animate-scale-up relative z-10">
+              <div className="p-8 text-center">
+                 <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <Power className="w-8 h-8" />
+                 </div>
+                 <h3 className="text-xl font-bold text-slate-900 tracking-tight">Disconnect Terminal?</h3>
+                 <p className="text-slate-500 mt-2 text-sm leading-relaxed">
+                    You are about to terminate the secure monitoring session. Authentication will be required to re-establish the link.
+                 </p>
+                 
+                 <div className="mt-8 space-y-3">
+                    <button 
+                       onClick={handleLogout}
+                       className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-red-100"
+                    >
+                       Confirm Disconnect
+                    </button>
+                    <button 
+                       onClick={() => setShowLogoutConfirm(false)}
+                       className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-all"
+                    >
+                       Cancel
+                    </button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
-
     </div>
   );
 }

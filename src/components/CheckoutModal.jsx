@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, CheckCircle, Banknote, Smartphone, ArrowRight, RotateCcw, Clock, AlertCircle, Download, MessageCircle } from 'lucide-react';
+import { X, CheckCircle, Banknote, Smartphone, ArrowRight, RotateCcw, Clock, AlertCircle, Download, MessageCircle, Copy } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { playSound } from '../utils/sounds';
 
@@ -115,6 +115,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       paymentMethod: payments.length === 1 ? payments[0].method : 'split',
       paymentBreakdown: payments,
       discount: discountAmount || 0,
+      date: new Date().toISOString(),
     };
     
     setCompletedSale(salePayload);
@@ -183,6 +184,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       creditCustomer: creditCustomerName.trim(),
       creditPending: pending,
       discount: discountAmount || 0,
+      date: new Date().toISOString(),
     };
 
     // Persist credit to localStorage
@@ -206,182 +208,62 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     onComplete(creditSale);
   }, [creditCustomerName, creditAmountPaid, total, cart, onComplete]);
 
-  // ─── Receipt Download via Canvas ───
-  const generateReceipt = (sale, cartItems, discountAmt) => {
-    const W = 320;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Pre-calculate height
-    const itemCount = cartItems.length;
-    const H = 340 + itemCount * 24 + (sale.payments.length * 22) + (discountAmt > 0 ? 24 : 0);
-    canvas.width = W;
-    canvas.height = H;
-    
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
-    
-    let y = 20;
-    
-    // Shop name
-    ctx.fillStyle = '#1e293b';
-    ctx.font = 'bold 18px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SPORTS ZONE', W / 2, y += 18);
-    ctx.font = '11px Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('POS Receipt', W / 2, y += 16);
-    
-    // Date
-    const now = new Date();
-    ctx.fillText(now.toLocaleString(), W / 2, y += 16);
-    
-    // Divider
-    y += 10;
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-    ctx.setLineDash([]);
-    y += 10;
-    
-    // Column headers
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#64748b';
-    ctx.font = 'bold 10px Arial, sans-serif';
-    ctx.fillText('ITEM', 16, y += 12);
-    ctx.fillText('QTY', 190, y);
-    ctx.textAlign = 'right';
-    ctx.fillText('AMOUNT', W - 16, y);
-    y += 6;
-    ctx.strokeStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-    y += 6;
-    
-    // Items
-    ctx.font = '12px Arial, sans-serif';
-    ctx.fillStyle = '#334155';
-    cartItems.forEach(item => {
-      ctx.textAlign = 'left';
-      const name = item.name.length > 22 ? item.name.substring(0, 22) + '...' : item.name;
-      ctx.fillText(name, 16, y += 18);
-      ctx.fillText(`x${item.qty}`, 196, y);
-      ctx.textAlign = 'right';
-      ctx.fillText(`₹${(item.price * item.qty).toFixed(0)}`, W - 16, y);
-    });
-    
-    // Divider
-    y += 10;
-    ctx.strokeStyle = '#e2e8f0'; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-    ctx.setLineDash([]);
-    y += 8;
-    
-    // Subtotal
-    ctx.font = '12px Arial, sans-serif';
-    ctx.textAlign = 'left'; ctx.fillStyle = '#64748b';
-    ctx.fillText('Subtotal', 16, y += 16);
-    ctx.textAlign = 'right'; ctx.fillStyle = '#334155';
-    const sub = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
-    ctx.fillText(`₹${sub.toFixed(2)}`, W - 16, y);
-    
-    // Discount
-    if (discountAmt > 0) {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#dc2626';
-      ctx.fillText('Discount', 16, y += 18);
-      ctx.textAlign = 'right';
-      ctx.fillText(`-₹${discountAmt.toFixed(2)}`, W - 16, y);
-    }
-    
-    // Grand Total
-    y += 6;
-    ctx.strokeStyle = '#1e293b'; ctx.setLineDash([]); ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.textAlign = 'left'; ctx.fillStyle = '#1e293b';
-    ctx.fillText('TOTAL', 16, y += 20);
-    ctx.textAlign = 'right';
-    ctx.fillText(`₹${sale.total.toFixed(2)}`, W - 16, y);
-    
-    // Payment breakdown
-    y += 10;
-    ctx.strokeStyle = '#e2e8f0'; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.font = '11px Arial, sans-serif';
-    sale.payments.forEach(p => {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#64748b';
-      ctx.fillText(methodLabel(p.method), 16, y += 18);
-      ctx.textAlign = 'right'; ctx.fillStyle = '#059669';
-      ctx.fillText(`₹${p.amount.toFixed(0)}`, W - 16, y);
-    });
-    if (sale.changeAmount > 0) {
-      ctx.textAlign = 'left'; ctx.fillStyle = '#d97706';
-      ctx.fillText('Change', 16, y += 18);
-      ctx.textAlign = 'right';
-      ctx.fillText(`₹${sale.changeAmount.toFixed(2)}`, W - 16, y);
-    }
-    
-    // Footer
-    y += 20;
-    ctx.textAlign = 'center'; ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px Arial, sans-serif';
-    ctx.fillText('Thank you for shopping!', W / 2, y += 14);
-    ctx.font = '10px Arial, sans-serif';
-    ctx.fillText('Sports Zone POS v1.0.0', W / 2, y += 14);
-    
-    // Download
-    const link = document.createElement('a');
-    link.download = `receipt-${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
-
   // ─── WhatsApp Bill Sharing ───
-  const sendWhatsAppBill = (sale, cartItems, discountAmt, phone) => {
+  const sendWhatsAppBill = async (sale, phone) => {
+    if (window.api?.getReceiptPreview && window.api?.copyToClipboard) {
+      const url = await window.api.getReceiptPreview(sale);
+      await window.api.copyToClipboard(url);
+    }
+
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     
-    let msg = `*🏪 Sports Zone*\n`;
-    msg += `━━━━━━━━━━━━━━━━\n`;
-    msg += `📋 Invoice #${Date.now().toString().slice(-4)}\n`;
-    msg += `📅 ${dateStr} | ${timeStr}\n\n`;
-    msg += `*Items:*\n`;
+    const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
+    const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
+    const taxPct = cgstPct + sgstPct;
+    const grandTotal = sale.total || 0;
+    const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
+    const gstAmt = grandTotal - taxableAmount;
     
-    cartItems.forEach(item => {
-      msg += `▸ ${item.name} x${item.qty} — ₹${(item.price * item.qty).toLocaleString()}\n`;
+    let msg = `🧾 *${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
+    msg += `Invoice No: #${sale.id || 'NEW'}\n`;
+    msg += `Date: ${dateStr}\n\n`;
+    msg += `━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Items:\n`;
+    
+    (sale.items || []).forEach(item => {
+      msg += `• ${item.name} (x${item.qty})        ₹${(item.price * item.qty).toLocaleString()}\n`;
     });
     
-    msg += `\n━━━━━━━━━━━━━━━━\n`;
+    msg += `\n━━━━━━━━━━━━━━━━\n\n`;
+    msg += `Subtotal:              ₹${taxableAmount.toFixed(0)}\n`;
     
-    const sub = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
-    if (discountAmt > 0) {
-      msg += `Subtotal: ₹${sub.toLocaleString()}\n`;
-      msg += `Discount: -₹${discountAmt.toFixed(0)}\n`;
+    if (taxPct > 0) {
+      msg += `GST (${taxPct}%):             ₹${gstAmt.toFixed(0)}\n`;
+    }
+    if (sale.discount > 0) {
+      msg += `Discount:            -₹${sale.discount.toFixed(0)}\n`;
     }
     
-    msg += `*Total: ₹${sale.total.toFixed(2)}*\n\n`;
+    msg += `*Total Amount:*        ₹${grandTotal.toLocaleString()}\n\n`;
+    msg += `━━━━━━━━━━━━━━━━\n\n`;
     
-    if (sale.payments && sale.payments.length > 0) {
-      msg += `💳 Paid via: ${sale.payments.map(p => `${methodLabel(p.method)} ₹${p.amount.toLocaleString()}`).join(' + ')}\n`;
+    let pMode = sale.paymentMethod ? methodLabel(sale.paymentMethod) : 'Cash';
+    if (pMode === 'Split') pMode = (sale.paymentBreakdown || []).map(p => methodLabel(p.method)).join(' + ');
+    
+    msg += `Payment Mode: ${pMode}\n`;
+    msg += `Status: ${sale.amountPaid >= grandTotal ? 'Paid ✅' : 'Pending ⏳'}\n\n`;
+    msg += `Thank you for your purchase! 🙏\n`;
+    msg += `We look forward to serving you again.\n\n`;
+    msg += `📍 ${appSettings?.businessName || 'Sports Zone'}\n`;
+    if (appSettings?.businessPhone) {
+      msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
     }
     
-    if (sale.changeAmount > 0) {
-      msg += `💰 Change: ₹${sale.changeAmount.toFixed(2)}\n`;
-    }
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
     
-    msg += `\n✅ Thank you for shopping!\n`;
-    msg += `Visit again 🙌`;
-    
-    // Clean phone number — remove spaces, dashes, and add country code if needed
-    let cleanPhone = phone.replace(/[\s\-()]/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = '91' + cleanPhone.slice(1);
-    if (!cleanPhone.startsWith('+') && !cleanPhone.startsWith('91')) cleanPhone = '91' + cleanPhone;
-    cleanPhone = cleanPhone.replace('+', '');
-    
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   // ─── Render ────────────────────────────────────────
@@ -418,7 +300,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
             <p className={`text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
               {isFullyPaid ? '✓ Fully Paid' : `Remaining to Pay:`}
             </p>
-            <p className={`text-2xl font-black ${dm ? 'text-white' : 'text-slate-800'}`}>₹{remaining.toFixed(2)}</p>
+            <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{remaining.toFixed(2)}</p>
           </div>
           
           {step === 'method' && (
@@ -795,10 +677,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                   onClick={async () => {
                     playSound('click');
                     if (window.api?.downloadReceipt) {
-                       const receiptSale = { ...completedSale, id: window.api ? (await window.api.getSales()).find(s => Math.abs(s.total - completedSale.total) < 0.01)?.id : Date.now() };
-                       await window.api.downloadReceipt(receiptSale);
-                    } else {
-                       generateReceipt(completedSale, cart, discount);
+                       await window.api.downloadReceipt(completedSale);
                     }
                   }}
                   className={`py-3 rounded-xl font-semibold text-xs border-2 flex flex-col items-center justify-center gap-1.5 transition-all

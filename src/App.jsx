@@ -2,7 +2,7 @@ import { useState, Component, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { useAutoLock } from './hooks/useAutoLock';
-import { Lock as LockIcon, ArrowRight, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Lock as LockIcon, ArrowRight, AlertTriangle, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import Layout from './components/Layout';
 import AuthScreen from './pages/AuthScreen';
 import UpdateNotifier from './components/UpdateNotifier';
@@ -21,7 +21,7 @@ import SalesLedger from './pages/SalesLedger';
 import Expenses from './pages/Expenses';
 import PurchaseLedger from './pages/PurchaseLedger';
 import Credits from './pages/Credits';
-import Roadmap from './pages/Roadmap';
+import ShareReceipts from './pages/ShareReceipts';
 import SystemHealth from './pages/SystemHealth';
 import ActivityLogs from './pages/ActivityLogs';
 
@@ -45,30 +45,56 @@ class LocalErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
-      // Mild styling fallback since we can't reliably read useApp() inside a generic class boundary effortlessly without an HOC wrapper
       const dm = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
       
       return (
-        <div className={`p-10 m-6 rounded-3xl border flex flex-col items-center justify-center text-center shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${dm ? 'bg-slate-800' : 'bg-white shadow-sm'}`}>
-            <AlertTriangle className={`w-8 h-8 ${dm ? 'text-amber-500' : 'text-amber-500'}`} />
+        <div className={`fixed inset-0 z-[99999] p-10 flex flex-col items-center justify-center text-center animate-fade-in ${dm ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+          <div className="absolute inset-0 bg-blue-600/5 pointer-events-none"></div>
+          
+          <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-10 shadow-xl relative overflow-hidden ${dm ? 'bg-indigo-900/40' : 'bg-blue-50'}`}>
+            <AlertTriangle className="w-10 h-10 text-blue-600 relative z-10" />
           </div>
-          <h3 className={`text-xl font-bold tracking-tight mb-2 ${dm ? 'text-white' : 'text-slate-900'}`}>Something went wrong</h3>
-          <p className={`text-sm max-w-md mb-8 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
-            We encountered an unexpected issue rendering this section. Your data is perfectly safe, but the screen needs to be reloaded.
+          
+          <h1 className="text-3xl font-bold tracking-tight mb-4 flex items-center gap-3">
+             <span className={dm ? 'text-white' : 'text-slate-900'}>Application Error</span>
+          </h1>
+          <p className={`text-base max-w-lg mb-12 font-medium leading-relaxed ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+            We encountered a system error while processing this page. <br/>
+            Your data is protected. Use the buttons below to recover.
           </p>
-          <div className="flex gap-3">
-             <button onClick={() => window.location.reload()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-500/20">
-               Reload Application
+
+          <div className="flex flex-wrap items-center justify-center gap-4 mb-20">
+             <button 
+               onClick={() => window.history.back()} 
+               className={`h-12 px-8 rounded-xl border-2 font-bold text-sm transition-all hover:scale-105 active:scale-95 ${dm ? 'border-slate-700 text-white hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+             >
+               ← Go Back
              </button>
-             <button onClick={() => this.setState({ showDetails: !this.state.showDetails })} className={`px-5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${dm ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-white'}`}>
-               {this.state.showDetails ? 'Hide Details' : 'Developer Info'}
+             <button 
+               onClick={() => window.location.reload()} 
+               className="h-12 px-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+             >
+               <RefreshCw className="w-4 h-4" /> Reload Application
              </button>
           </div>
+
+          <div className="absolute bottom-12 w-full max-w-xs px-6">
+            <button 
+              onClick={() => this.setState({ showDetails: !this.state.showDetails })} 
+              className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 border shadow-sm ${dm ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-900'}`}
+            >
+              {this.state.showDetails ? 'Hide System Log' : 'View System Log'}
+            </button>
+          </div>
+
           {this.state.showDetails && (
-            <div className={`mt-8 p-5 rounded-xl text-left w-full max-w-3xl overflow-auto text-xs font-mono border ${dm ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-              <p className="font-bold mb-3 text-red-500">{this.state.error?.message || 'Unknown Error'}</p>
-              <pre className="whitespace-pre-wrap">{this.state.error?.stack}</pre>
+            <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 p-6 rounded-2xl text-left w-full max-w-3xl overflow-auto text-[10px] font-mono border-2 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-300 ${dm ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                 <span className="font-bold opacity-50">STACK TRACE AUDIT</span>
+              </div>
+              <p className="font-bold mb-3 text-xs bg-red-500 text-white p-1 px-3 rounded inline-block">{this.state.error?.message || 'Unknown Error'}</p>
+              <pre className="whitespace-pre-wrap opacity-70 leading-relaxed">{this.state.error?.stack}</pre>
             </div>
           )}
         </div>
@@ -91,7 +117,7 @@ function AutoLockWrapper({ children }) {
              <AlertTriangle className="w-16 h-16 mx-auto mb-4 relative z-10" />
              <h2 className="text-2xl font-bold mb-2 relative z-10">Session Expiring</h2>
              <p className="text-red-100 mb-6 relative z-10">Admin session is locking automatically due to inactivity.</p>
-             <div className="text-6xl font-black tabular-nums tracking-tighter relative z-10">{timeLeft}s</div>
+             <div className="text-6xl font-bold tabular-nums tracking-tighter relative z-10">{timeLeft}s</div>
              <p className="mt-6 text-sm opacity-80 relative z-10">Move mouse or press any key to cancel.</p>
           </div>
         </div>
@@ -217,22 +243,25 @@ function AppContent() {
   if (!currentUser) {
     return <AuthScreen onLogin={setCurrentUser} savedUsers={users} />;
   }
-
   if (isLocked) {
-    return <AuthScreen
-      onLogin={(user) => {
-         if (user.role === currentUser.role) {
-           setIsLocked(false);
-         } else {
-           setCurrentUser(user);
-           setIsLocked(false);
-         }
-      }}
-      savedUsers={users}
-      onLockMode={true}
-      lockedUser={currentUser}
-    />;
+    return (
+      <AuthScreen
+        onLogin={(user) => {
+           if (user.role === currentUser.role) {
+             setIsLocked(false);
+           } else {
+             setCurrentUser(user);
+             setIsLocked(false);
+           }
+        }}
+        savedUsers={users}
+        onLockMode={true}
+        lockedUser={currentUser}
+      />
+    );
   }
+
+  const { isReady, darkMode: dm, toasts, dismissToast } = useApp();
 
   return (
     <Router>
@@ -245,17 +274,17 @@ function AppContent() {
             <Route path="sales-ledger"    element={<SalesLedger />} />
             <Route path="customers"       element={<Customers />} />
             <Route path="credits"         element={<Credits />} />
+            <Route path="share-receipts"  element={<ShareReceipts />} />
 
             {/* Admin Routes (Protected) */}
             <Route path="home"            element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="inventory"       element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+            <Route path="inventory"       element={<Inventory />} />
             <Route path="purchases"       element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
             <Route path="reports"         element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="accounting"      element={<ProtectedRoute><Accounting /></ProtectedRoute>} />
             <Route path="settings"        element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="expenses"        element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="purchase-ledger" element={<ProtectedRoute><PurchaseLedger /></ProtectedRoute>} />
-            <Route path="roadmap"         element={<ProtectedRoute><Roadmap /></ProtectedRoute>} />
             <Route path="system-health"   element={<ProtectedRoute><SystemHealth /></ProtectedRoute>} />
             <Route path="activity-logs"   element={<ProtectedRoute><ActivityLogs /></ProtectedRoute>} />
           </Route>

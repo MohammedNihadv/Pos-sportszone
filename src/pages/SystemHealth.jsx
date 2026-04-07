@@ -140,10 +140,10 @@ export default function SystemHealth() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
       <div>
-        <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>System Health</h2>
-        <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>App diagnostics, backups, and error logs</p>
+        <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>System Health</h2>
+        <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>App diagnostics, backups, and error logs</p>
       </div>
 
       {/* Status Cards */}

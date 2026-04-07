@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Box, ShoppingBag, Users,
   BarChart3, Calculator, Settings, Moon, Sun, ChevronLeft, ChevronRight,
-  Wifi, WifiOff, RefreshCw, BookOpen, TrendingDown, Layers, Map, Lock as LockIcon, Clock, Activity, Shield
+  Wifi, WifiOff, RefreshCw, BookOpen, TrendingDown, Layers, Map, Lock as LockIcon, Clock, Activity, Shield, FileText
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
@@ -14,6 +14,7 @@ const NAV_SECTIONS = [
     items: [
       { name: 'Dashboard',       path: '/home',           icon: LayoutDashboard },
       { name: 'POS Billing',     path: '/pos',            icon: ShoppingCart },
+      { name: 'Share Receipts',  path: '/share-receipts', icon: FileText },
     ],
   },
   {
@@ -43,7 +44,6 @@ const NAV_SECTIONS = [
   {
     label: 'System',
     items: [
-      { name: 'Roadmap',         path: '/roadmap',        icon: Map },
       { name: 'System Health',   path: '/system-health',  icon: Activity },
       { name: 'Activity Logs',   path: '/activity-logs',  icon: BookOpen },
       { name: 'Settings',        path: '/settings',       icon: Settings },
@@ -91,13 +91,13 @@ export default function Sidebar() {
   }).map(section => {
     if (isAdminUnlocked) return section;
     if (currentUser?.role === 'Owner') {
-      const excludedOwnerItems = ['POS Billing', 'Purchases']; // Keep Settings and Roadmap
+      const excludedOwnerItems = ['POS Billing', 'Purchases', 'Share Receipts']; // Keep Settings
       const ownerItems = section.items.filter(item => !excludedOwnerItems.includes(item.name));
       return ownerItems.length > 0 ? { ...section, items: ownerItems } : null;
     }
     // Salesman mode: filter individual items
     const salesmanItems = section.items.filter(item => 
-      ['POS Billing', 'Sales Ledger', 'Customers', 'Credits'].includes(item.name)
+      ['POS Billing', 'Inventory', 'Sales Ledger', 'Share Receipts', 'Customers', 'Credits'].includes(item.name)
     );
     return salesmanItems.length > 0 ? { ...section, items: salesmanItems } : null;
   }).filter(Boolean);

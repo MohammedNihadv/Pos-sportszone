@@ -49,6 +49,7 @@ export function AppProvider({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [syncStatus, setSyncStatus] = useState('synced');
+  const [isReady, setIsReady] = useState(false);
   
   // Core Data
   const [products, setProducts] = useState([]);
@@ -122,6 +123,7 @@ export function AppProvider({ children }) {
         if (settings && Object.keys(settings).length > 0) {
           setAppSettingsState(prev => ({ ...prev, ...settings }));
         }
+        setIsReady(true);
       } catch (err) {
         console.warn('API load failed, using fallback data:', err);
         setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
@@ -131,6 +133,7 @@ export function AppProvider({ children }) {
           { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
           { id: 3, role: 'Owner', name: 'Owner', pin: '1111' },
         ]);
+        setIsReady(true);
       }
     } else {
       setProducts(DEFAULT_PRODUCTS);
@@ -142,20 +145,28 @@ export function AppProvider({ children }) {
         { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
         { id: 3, role: 'Owner', name: 'Owner', pin: '1111' },
       ]);
+      setIsReady(true);
     }
   }, [api]);
 
   const saveAppSettings = useCallback(async (newSettings) => {
-    const updated = { ...appSettings, ...newSettings };
-    setAppSettingsState(updated);
-    if (api) {
-      await api.saveSettings(newSettings);
-    }
-    // Also sync localStorage for legacy hooks/utils
-    Object.entries(newSettings).forEach(([k, v]) => {
-      localStorage.setItem(`sz_${k}`, typeof v === 'object' ? JSON.stringify(v) : v);
+    // Crucial: Use functional update to avoid stale closure issues
+    setAppSettingsState(prev => {
+      const updated = { ...prev, ...newSettings };
+      
+      // Save to disk asynchronously
+      if (api) {
+        api.saveSettings(newSettings).catch(err => console.error("Cloud settings save failed", err));
+      }
+      
+      // Sync localStorage
+      Object.entries(newSettings).forEach(([k, v]) => {
+        localStorage.setItem(`sz_${k}`, typeof v === 'object' ? JSON.stringify(v) : v);
+      });
+      
+      return updated;
     });
-  }, [api, appSettings]);
+  }, [api]);
 
   useEffect(() => {
     loadData();
@@ -252,7 +263,7 @@ export function AppProvider({ children }) {
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits, customers, setCustomers,
     appSettings, saveAppSettings, isOwner,
-    refreshProducts, refreshSales, loadData
+    refreshProducts, refreshSales, loadData, isReady
   }), [
     darkMode, sidebarCollapsed, toasts, syncStatus, logo,
     isAdminUnlocked, adminPin, users, currentUser, isLocked,

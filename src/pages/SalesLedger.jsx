@@ -3,12 +3,12 @@ import { Plus, Search, X, TrendingUp, Edit2, Trash2, Check } from 'lucide-react'
 import { useApp } from '../context/AppContext';
 
 
-function SaleModal({ sale, onClose, onSave, dm }) {
+function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
   const isNew = !sale;
   const initBreakdown = sale?.paymentBreakdown || [{ method: sale?.payment_method || 'cash', amount: sale?.amountPaid || '' }];
   
   const [form, setForm] = useState(sale || {
-    date: new Date().toISOString().slice(0, 16), inv: '', description: '', cost: '', selling: '', payment_method: 'cash', amountPaid: '', changeAmount: '', paymentBreakdown: [{ method: 'cash', amount: '' }], changeReturnMethod: 'cash'
+    date: new Date().toLocaleDateString('en-CA'), inv: '', description: '', cost: '', selling: '', payment_method: 'cash', amountPaid: '', changeAmount: '', paymentBreakdown: [{ method: 'cash', amount: '' }], changeReturnMethod: 'cash'
   });
 
   const [breakdown, setBreakdown] = useState(initBreakdown.map(b => ({ ...b })));
@@ -80,7 +80,7 @@ function SaleModal({ sale, onClose, onSave, dm }) {
             <textarea className={inputCls + ' resize-none'} rows={2} value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} placeholder="jersey 5 collar, shorts pp, boot focus 2.0" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>
+            {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>}
             <div>
               <label className={labelCls}>Selling Price (₹)</label>
               <input type="number" className={inputCls} value={form.selling} onChange={e => {
@@ -138,7 +138,7 @@ function SaleModal({ sale, onClose, onSave, dm }) {
             </div>
           )}
 
-          {form.cost && form.selling && (
+          {showFinancials && form.cost && form.selling && (
             <div className={`rounded-xl p-3 text-center ${profit >= 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-red-900/30' : 'bg-red-50')}`}>
               <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Profit: ₹{profit.toFixed(2)} &nbsp;|&nbsp; Margin: {pct}%
@@ -158,8 +158,9 @@ function SaleModal({ sale, onClose, onSave, dm }) {
 }
 
 export default function SalesLedger() {
-  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner } = useApp();
+  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked } = useApp();
   const dm = darkMode;
+  const showFinancials = isOwner || isAdminUnlocked;
   // Map live POS sales to ledger format + allow manual entries
   const [manualSales, setManualSales] = useState([]);
   const allSales = useMemo(() => {
@@ -214,7 +215,8 @@ export default function SalesLedger() {
            amountPaid: entry.amountPaid,
            changeAmount: entry.changeAmount,
            paymentBreakdown: entry.paymentBreakdown,
-           changeReturnMethod: entry.changeReturnMethod
+           changeReturnMethod: entry.changeReturnMethod,
+           date: entry.rawDate.toISOString() // Critical fix: save the correct ISO date here instead of the UI formatted date
         };
         if (window.api) {
            await window.api.saveSale(updated);
@@ -261,15 +263,15 @@ export default function SalesLedger() {
   const th = `px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Sales Ledger</h2>
-          <p className={`text-sm mt-0.5 flex items-center gap-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
-             All sale entries — click <Edit2 className="w-3.5 h-3.5 mx-0.5" /> to edit any row
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Sales Ledger</h2>
+          <p className={`text-sm mt-1.5 font-medium flex items-center gap-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+             All sale entries {!isOwner && <span>— click <Edit2 className="w-3.5 h-3.5 mx-0.5 inline" /> to edit any row</span>}
           </p>
         </div>
-        {!isOwner && (
+        {!isOwner && showFinancials && (
           <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700">
             <Plus className="w-4 h-4" /> Add Entry
           </button>
@@ -280,9 +282,9 @@ export default function SalesLedger() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Total Entries', value: filtered.length, fmt: 'num', color: 'text-blue-600' },
-          { label: 'Total Cost (₹)', value: totals.cost, fmt: 'curr', color: dm ? 'text-white' : 'text-slate-800' },
+          { label: 'Total Cost (₹)', value: showFinancials ? totals.cost : '***', fmt: 'curr', color: dm ? 'text-white' : 'text-slate-800' },
           { label: 'Total Sales (₹)', value: totals.selling, fmt: 'curr', color: 'text-blue-600' },
-          { label: 'Total Profit (₹)', value: totals.profit, fmt: 'curr', color: totals.profit >= 0 ? 'text-green-600' : 'text-red-500' },
+          { label: 'Total Profit (₹)', value: showFinancials ? totals.profit : '***', fmt: 'curr', color: totals.profit >= 0 ? 'text-green-600' : 'text-red-500' },
         ].map(s => (
           <div key={s.label} className={`${card} p-4`}>
             <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.label}</p>
@@ -346,11 +348,13 @@ export default function SalesLedger() {
                       <span className="line-clamp-1 text-sm">{s.description}</span>
                     </td>
                     <td className={`px-4 py-3.5 text-xs font-semibold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{s.payment_method}</td>
-                    <td className={`px-4 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>₹{s.cost.toLocaleString()}</td>
+                    <td className={`px-4 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{showFinancials ? `₹${s.cost.toLocaleString()}` : '🔒'}</td>
                     <td className="px-4 py-3.5 text-right font-semibold text-blue-600">₹{s.selling.toLocaleString()}</td>
-                    <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{profit.toLocaleString()}</td>
+                    <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{showFinancials ? `₹${profit.toLocaleString()}` : '🔒'}</td>
                     <td className="px-4 py-3.5 text-right">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {showFinancials ? `${pct}%` : '***'}
+                      </span>
                     </td>
                     <td className={`px-4 py-3.5 text-right font-bold ${dm ? 'text-emerald-400' : 'text-emerald-600'}`}>₹{s.amountPaid?.toLocaleString() || s.selling.toLocaleString()}</td>
                     {!isOwner && (
@@ -373,11 +377,11 @@ export default function SalesLedger() {
               <tfoot>
                 <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
                   <td colSpan={4} className={`px-4 py-3 text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total ({filtered.length} entries)</td>
-                  <td className={`px-4 py-3 text-right text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>₹{totals.cost.toLocaleString()}</td>
+                  <td className={`px-4 py-3 text-right text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>{showFinancials ? `₹${totals.cost.toLocaleString()}` : '***'}</td>
                   <td className="px-4 py-3 text-right text-sm text-blue-600">₹{totals.selling.toLocaleString()}</td>
-                  <td className={`px-4 py-3 text-right text-sm ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{totals.profit.toLocaleString()}</td>
+                  <td className={`px-4 py-3 text-right text-sm ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{showFinancials ? `₹${totals.profit.toLocaleString()}` : '***'}</td>
                   <td className={`px-4 py-3 text-right text-xs font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {totals.selling > 0 ? ((totals.profit / totals.selling) * 100).toFixed(1) : 0}%
+                    {showFinancials ? (totals.selling > 0 ? ((totals.profit / totals.selling) * 100).toFixed(1) + '%' : '0%') : '***'}
                   </td>
                   <td />
                 </tr>
@@ -394,7 +398,7 @@ export default function SalesLedger() {
       </div>
 
       {(modal === 'new' || (modal && modal.id)) && (
-        <SaleModal sale={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} />
+        <SaleModal sale={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} showFinancials={showFinancials} />
       )}
     </div>
   );

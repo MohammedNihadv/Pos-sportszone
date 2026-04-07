@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { playSound } from '../utils/sounds';
 
 // --- Products are now managed via SQLite ---
 
 
-function ProductModal({ product, onClose, onSave, dm, categories, setCategories, addToast }) {
+function ProductModal({ product, onClose, onSave, dm, categories, setCategories, addToast, showFinancials }) {
   const [form, setForm] = useState(product || { name: '', sku: '', category: categories[0]?.name || 'Jerseys', stock: '', cost: '', price: '', emoji: '👕' });
   const isNew = !product;
 
@@ -66,7 +67,7 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
             </select>
           </div>
           <div><label className={labelCls}>Stock Qty</label><input type="number" className={inputCls} value={form.stock} onChange={e => setForm(p => ({...p, stock: e.target.value}))} placeholder="0" /></div>
-          <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} placeholder="0" /></div>
+          {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} placeholder="0" /></div>}
           <div><label className={labelCls}>Selling Price (₹) *</label><input type="number" className={inputCls} value={form.price} onChange={e => setForm(p => ({...p, price: e.target.value}))} placeholder="0" /></div>
           
           <div className="col-span-2 mt-2">
@@ -97,8 +98,9 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
 }
 
 export default function Inventory() {
-  const { darkMode, addToast, products, setProducts, categories, setCategories, isOwner } = useApp();
+  const { darkMode, addToast, products, setProducts, categories, setCategories, isOwner, isAdminUnlocked, refreshProducts } = useApp();
   const dm = darkMode;
+  const showFinancials = isOwner || isAdminUnlocked;
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
 
@@ -147,18 +149,31 @@ export default function Inventory() {
   const th = `px-4 py-3 text-left font-medium text-xs uppercase tracking-wide ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
       {/* Title row */}
       <div className="flex justify-between items-end">
         <div>
-          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Inventory</h2>
-          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sports Zone — {products.length} products across 7 categories</p>
+          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Inventory</h2>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sports Zone — {products.length} products across 7 categories</p>
         </div>
-        {!isOwner && (
-          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md">
-            <Plus className="w-4 h-4" /> Add Product
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={async () => {
+              playSound('click');
+              await refreshProducts();
+              addToast('Inventory Refreshed', 'success');
+            }}
+            className={`p-2.5 rounded-xl border transition-colors ${dm ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+            title="Force Sync"
+          >
+            <RefreshCw className="w-4 h-4" />
           </button>
-        )}
+          {!isOwner && showFinancials && (
+            <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md">
+              <Plus className="w-4 h-4" /> Add Product
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI Row */}
@@ -169,7 +184,7 @@ export default function Inventory() {
         </div>
         <div className={`${card} p-4`}>
           <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Stock Value</p>
-          <p className="text-3xl font-bold mt-1 text-green-600">₹{totalValue.toLocaleString()}</p>
+          <p className="text-3xl font-bold mt-1 text-green-600">{showFinancials ? `₹${totalValue.toLocaleString()}` : '₹ ***'}</p>
         </div>
         <div className={`rounded-2xl border shadow-sm p-4 ${lowStockCount > 0 ? (dm ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200') : (dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100')}`}>
           <p className={`text-xs font-medium flex items-center gap-1.5 ${lowStockCount > 0 ? 'text-red-600' : (dm ? 'text-slate-400' : 'text-slate-500')}`}>
@@ -202,7 +217,7 @@ export default function Inventory() {
                 <th className={th + ' text-right'}>Price</th>
                 <th className={th + ' text-right'}>Margin</th>
                 <th className={th + ' text-right'}>Value</th>
-                {!isOwner && <th className={th + ' text-center'}>Actions</th>}
+                {!isOwner && showFinancials && <th className={th + ' text-center'}>Actions</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
@@ -224,13 +239,13 @@ export default function Inventory() {
                         {p.stock}
                       </span>
                     </td>
-                    <td className={`px-4 py-3.5 text-right text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>₹{p.cost}</td>
+                    <td className={`px-4 py-3.5 text-right text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{showFinancials ? `₹${p.cost}` : '🔒'}</td>
                     <td className={`px-4 py-3.5 text-right font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{p.price}</td>
                     <td className="px-4 py-3.5 text-right">
-                      <span className="text-xs font-bold text-green-600">{margin}%</span>
+                      <span className="text-xs font-bold text-green-600">{showFinancials ? `${margin}%` : '***'}</span>
                     </td>
-                    <td className="px-4 py-3.5 text-right font-semibold text-blue-600">₹{(p.stock * p.cost).toLocaleString()}</td>
-                    {!isOwner && (
+                    <td className="px-4 py-3.5 text-right font-semibold text-blue-600">{showFinancials ? `₹${(p.stock * p.cost).toLocaleString()}` : '***'}</td>
+                    {!isOwner && showFinancials && (
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
@@ -261,6 +276,7 @@ export default function Inventory() {
           categories={categories}
           setCategories={setCategories}
           addToast={addToast}
+          showFinancials={showFinancials}
         />
       )}
     </div>
