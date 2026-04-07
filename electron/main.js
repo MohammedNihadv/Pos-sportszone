@@ -553,6 +553,42 @@ safeHandle('copy-image-to-clipboard', async (_, dataUrl) => {
   }
 });
 
+safeHandle('download-receipt-png', async (_, sale) => {
+  try {
+    const rows = getDb().prepare('SELECT * FROM settings').all();
+    const settings = {};
+    rows.forEach(r => {
+      try { settings[r.key] = JSON.parse(r.value); } catch { settings[r.key] = r.value; }
+    });
+    const dataUrl = await generateReceiptImage(sale, settings);
+    if (!dataUrl) return { success: false, error: 'Failed to generate image' };
+
+    const saleId = sale.id || Date.now();
+    const receiptDir = path.join(app.getPath('documents'), 'SportsZone', 'Receipts');
+    if (!fs.existsSync(receiptDir)) fs.mkdirSync(receiptDir, { recursive: true });
+    const filePath = path.join(receiptDir, `receipt_INV_${saleId}_${Date.now()}.png`);
+    
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+    fs.writeFileSync(filePath, base64, 'base64');
+    logInfo('Receipt', `Saved PNG: ${filePath}`);
+    shell.showItemInFolder(filePath);
+    return { success: true, path: filePath };
+  } catch (err) {
+    logError('ReceiptPNG', err);
+    return { success: false, error: err.message };
+  }
+});
+
+safeHandle('open-external-url', async (_, url) => {
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch (err) {
+    logError('OpenExternal', err);
+    return false;
+  }
+});
+
 safeHandle('get-audit-logs', () => {
   return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500').all();
 });

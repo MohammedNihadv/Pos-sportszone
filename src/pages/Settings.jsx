@@ -210,30 +210,26 @@ export default function Settings() {
                   <img src={logo} alt="Store Logo" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex-1 w-full sm:w-auto space-y-2">
-                  <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Store Name</p>
                   <input
-                    className={`w-full px-3 py-2 rounded-lg text-base font-bold border-2 outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'} ${isOwner ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500'}`}
+                    className={`w-full px-3 py-2 rounded-lg text-base font-bold border-2 outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'} focus:border-blue-500`}
                     value={localSettings.businessName}
-                    onChange={e => !isOwner && setLocalSettings({...localSettings, businessName: e.target.value})}
+                    onChange={e => setLocalSettings({...localSettings, businessName: e.target.value})}
                     placeholder="e.g. Sports Zone"
-                    readOnly={isOwner}
                   />
-                  {!isOwner && (
-                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
-                      <Upload className="w-3.5 h-3.5" /> Change Logo
-                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                    </label>
-                  )}
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
+                    <Upload className="w-3.5 h-3.5" /> Change Logo
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  </label>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className={labelCls}>GST Identification</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessGstin} onChange={e => !isOwner && setLocalSettings({...localSettings, businessGstin: e.target.value})} readOnly={isOwner} /></div>
-                  <div><label className={labelCls}>Official Phone</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessPhone} onChange={e => !isOwner && setLocalSettings({...localSettings, businessPhone: e.target.value})} readOnly={isOwner} /></div>
+                  <div><label className={labelCls}>GST Identification</label><input className={inputCls} value={localSettings.businessGstin} onChange={e => setLocalSettings({...localSettings, businessGstin: e.target.value})} /></div>
+                  <div><label className={labelCls}>Official Phone</label><input className={inputCls} value={localSettings.businessPhone} onChange={e => setLocalSettings({...localSettings, businessPhone: e.target.value})} /></div>
                 </div>
-                <div><label className={labelCls}>Email Address</label><input className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.businessEmail} onChange={e => !isOwner && setLocalSettings({...localSettings, businessEmail: e.target.value})} readOnly={isOwner} /></div>
-                <div><label className={labelCls}>Physical Address</label><textarea className={`${inputCls} resize-none ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} rows={2} value={localSettings.businessAddress} onChange={e => !isOwner && setLocalSettings({...localSettings, businessAddress: e.target.value})} readOnly={isOwner} /></div>
+                <div><label className={labelCls}>Email Address</label><input className={inputCls} value={localSettings.businessEmail} onChange={e => setLocalSettings({...localSettings, businessEmail: e.target.value})} /></div>
+                <div><label className={labelCls}>Physical Address</label><textarea className={`${inputCls} resize-none`} rows={2} value={localSettings.businessAddress} onChange={e => setLocalSettings({...localSettings, businessAddress: e.target.value})} /></div>
               </div>
             </div>
           </div>
@@ -246,10 +242,10 @@ export default function Settings() {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className={labelCls}>CGST %</label>
-                 <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cgstRate} onChange={(e) => !isOwner && setLocalSettings({...localSettings, cgstRate: e.target.value})} readOnly={isOwner} />
+                 <input type="number" step="0.01" className={inputCls} value={localSettings.cgstRate} onChange={(e) => setLocalSettings({...localSettings, cgstRate: e.target.value})} />
               </div>
               <div><label className={labelCls}>SGST %</label>
-                 <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.sgstRate} onChange={(e) => !isOwner && setLocalSettings({...localSettings, sgstRate: e.target.value})} readOnly={isOwner} />
+                 <input type="number" step="0.01" className={inputCls} value={localSettings.sgstRate} onChange={(e) => setLocalSettings({...localSettings, sgstRate: e.target.value})} />
               </div>
             </div>
           </div>
@@ -266,15 +262,15 @@ export default function Settings() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Cash Balance</label>
-                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.cashBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, cashBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
+                <input type="number" step="0.01" className={inputCls} value={localSettings.cashBalance} onChange={(e) => setLocalSettings({...localSettings, cashBalance: e.target.value})} />
               </div>
               <div>
                 <label className={labelCls}>UPI Balance</label>
-                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.upiBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, upiBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
+                <input type="number" step="0.01" className={inputCls} value={localSettings.upiBalance} onChange={(e) => setLocalSettings({...localSettings, upiBalance: e.target.value})} />
               </div>
               <div>
                 <label className={labelCls}>Bank Balance</label>
-                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.bankBalance || 0} onChange={(e) => !isOwner && setLocalSettings({...localSettings, bankBalance: parseFloat(e.target.value) || 0})} readOnly={isOwner} />
+                <input type="number" step="0.01" className={inputCls} value={localSettings.bankBalance} onChange={(e) => setLocalSettings({...localSettings, bankBalance: e.target.value})} />
               </div>
             </div>
           </div>

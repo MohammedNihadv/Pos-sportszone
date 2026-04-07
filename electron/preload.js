@@ -81,6 +81,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // ─── NEW: Receipt Download ───
   downloadReceipt: (sale) => ipcRenderer.invoke('download-receipt', sale),
+  downloadReceiptPng: (sale) => ipcRenderer.invoke('download-receipt-png', sale),
   getReceiptPreview: (sale) => ipcRenderer.invoke('get-receipt-preview', sale),
   copyToClipboard: (dataUrl) => ipcRenderer.invoke('copy-image-to-clipboard', dataUrl),
+
+  // ─── Utility ───
+  openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
 });

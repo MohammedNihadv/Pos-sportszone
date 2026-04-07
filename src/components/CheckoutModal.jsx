@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, CheckCircle, Banknote, Smartphone, ArrowRight, RotateCcw, Clock, AlertCircle, Download, MessageCircle, Copy } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
 /**
@@ -25,6 +26,7 @@ const QUICK_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
 export default function CheckoutModal({ onClose, onComplete, dm }) {
   const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal, clearCart } = useCart();
+  const { appSettings } = useApp();
   // Step: 'method' → 'amount' → 'change' → 'success'
   const [step, setStep] = useState('method');
   const [payments, setPayments] = useState([]); // [{method, amount}]
@@ -225,37 +227,37 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
     const gstAmt = grandTotal - taxableAmount;
     
-    let msg = `🧾 *${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
-    msg += `Invoice No: #${sale.id || 'NEW'}\n`;
-    msg += `Date: ${dateStr}\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Items:\n`;
+    let msg = `*${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
+    msg += `Invoice: #${sale.id || 'NEW'}\n`;
+    msg += `Date: ${dateStr}\n`;
+    msg += `--------------------------------\n\n`;
+    msg += `*Items:*\n`;
     
     (sale.items || []).forEach(item => {
-      msg += `• ${item.name} (x${item.qty})        ₹${(item.price * item.qty).toLocaleString()}\n`;
+      msg += `• ${item.name} (x${item.qty}) - ₹${(item.price * item.qty).toLocaleString()}\n`;
     });
     
-    msg += `\n━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Subtotal:              ₹${taxableAmount.toFixed(0)}\n`;
+    msg += `\n--------------------------------\n`;
+    msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
     
     if (taxPct > 0) {
-      msg += `GST (${taxPct}%):             ₹${gstAmt.toFixed(0)}\n`;
+      msg += `GST (${taxPct}%): ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
     }
     if (sale.discount > 0) {
-      msg += `Discount:            -₹${sale.discount.toFixed(0)}\n`;
+      msg += `Discount: -₹${sale.discount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
     }
     
-    msg += `*Total Amount:*        ₹${grandTotal.toLocaleString()}\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
+    msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
+    msg += `--------------------------------\n\n`;
     
     let pMode = sale.paymentMethod ? methodLabel(sale.paymentMethod) : 'Cash';
     if (pMode === 'Split') pMode = (sale.paymentBreakdown || []).map(p => methodLabel(p.method)).join(' + ');
     
-    msg += `Payment Mode: ${pMode}\n`;
-    msg += `Status: ${sale.amountPaid >= grandTotal ? 'Paid ✅' : 'Pending ⏳'}\n\n`;
-    msg += `Thank you for your purchase! 🙏\n`;
+    msg += `Payment: ${pMode.toUpperCase()}\n`;
+    msg += `Status: PAID\n\n`;
+    msg += `Thank you for your purchase!\n`;
     msg += `We look forward to serving you again.\n\n`;
-    msg += `📍 ${appSettings?.businessName || 'Sports Zone'}\n`;
+    msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
     if (appSettings?.businessPhone) {
       msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
     }
@@ -263,7 +265,12 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     let cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
     
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    if (window.api?.openExternal) {
+      await window.api.openExternal(waUrl);
+    } else {
+      window.open(waUrl, '_blank');
+    }
   };
 
   // ─── Render ────────────────────────────────────────
@@ -653,14 +660,14 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                         ${dm ? 'bg-slate-900 border-slate-600 text-white focus:border-green-500' : 'bg-white border-slate-200 focus:border-green-500'}`}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && whatsappPhone.length >= 10) {
-                          sendWhatsAppBill(completedSale, cart, discount, whatsappPhone);
+                          sendWhatsAppBill(completedSale, whatsappPhone);
                         }
                       }}
                     />
                     <button
                       onClick={() => {
                         if (whatsappPhone.length >= 10) {
-                          sendWhatsAppBill(completedSale, cart, discount, whatsappPhone);
+                          sendWhatsAppBill(completedSale, whatsappPhone);
                         }
                       }}
                       disabled={whatsappPhone.length < 10}
@@ -676,8 +683,8 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                 <button
                   onClick={async () => {
                     playSound('click');
-                    if (window.api?.downloadReceipt) {
-                       await window.api.downloadReceipt(completedSale);
+                    if (window.api?.downloadReceiptPng) {
+                       await window.api.downloadReceiptPng(completedSale);
                     }
                   }}
                   className={`py-3 rounded-xl font-semibold text-xs border-2 flex flex-col items-center justify-center gap-1.5 transition-all

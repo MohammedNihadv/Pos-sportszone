@@ -62,14 +62,15 @@ export function generateReceiptHTML(sale, settings = {}) {
 <head>
   <meta charset="utf-8">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+    ::-webkit-scrollbar { display: none; }
+    html, body { overflow: hidden !important; height: auto !important; margin: 0; padding: 0; background: white; }
     body { 
-      font-family: 'Segoe UI', system-ui, sans-serif; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       color: #0f172a; 
-      background: white;
-      width: ${width};
-      margin: 0 auto;
+      width: ${isThermal ? (printerType.includes('58mm') ? '210px' : '290px') : '800px'};
       padding: ${padding};
+      word-wrap: break-word;
     }
     .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 12px; }
     .header h1 { font-size: ${isThermal ? '18px' : '28px'}; font-weight: 900; color: #1e40af; text-transform: uppercase; margin-bottom: 2px; }
@@ -142,7 +143,8 @@ export async function generateReceiptImage(sale, settings = {}) {
   try {
     const { BrowserWindow } = await import('electron');
     const isThermal = (settings.printerType || '').includes('Thermal');
-    const width = isThermal ? ((settings.printerType || '').includes('58mm') ? 300 : 400) : 800;
+    // Set window width slightly larger than content to prevent any clipping from scrollbars/padding
+    const width = isThermal ? ((settings.printerType || '').includes('58mm') ? 220 : 300) : 820;
 
     const win = new BrowserWindow({
       width,
@@ -159,7 +161,7 @@ export async function generateReceiptImage(sale, settings = {}) {
 
     // Auto-crop to content height
     const height = await win.webContents.executeJavaScript('document.body.scrollHeight');
-    win.setSize(width, height + 50);
+    win.setSize(width, Math.min(height + 20, 2500)); // Add a small height buffer, cap at reasonable length
 
     const image = await win.webContents.capturePage();
     win.close();

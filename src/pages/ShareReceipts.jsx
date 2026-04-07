@@ -11,6 +11,7 @@ export default function ShareReceipts() {
   const [previewSale, setPreviewSale] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [copying, setCopying] = useState(false);
+  const [whatsappModal, setWhatsappModal] = useState({ open: false, sale: null, phone: '' });
 
   const filteredSales = useMemo(() => {
     return (sales || []).filter(s => {
@@ -25,9 +26,13 @@ export default function ShareReceipts() {
 
   const handleDownload = async (sale) => {
     playSound('click');
-    if (window.api?.downloadReceipt) {
-      await window.api.downloadReceipt(sale);
-      addToast(`Receipt for INV-${sale.id} downloaded`, 'success');
+    if (window.api?.downloadReceiptPng) {
+      const result = await window.api.downloadReceiptPng(sale);
+      if (result?.success) {
+        addToast(`Receipt PNG for INV-${sale.id} saved & opened!`, 'success');
+      } else {
+        addToast(`Download failed: ${result?.error || 'Unknown error'}`, 'error');
+      }
     } else {
       addToast('Download not available in browser mode', 'warning');
     }
@@ -56,67 +61,84 @@ export default function ShareReceipts() {
 
   const handleWhatsApp = async (sale) => {
     playSound('pop');
-    const phone = prompt("Enter Customer WhatsApp Number (e.g. 9876543210):");
-    if (!phone || phone.length < 10) return;
-
     if (window.api?.getReceiptPreview && window.api?.copyToClipboard) {
-      const url = await window.api.getReceiptPreview(sale);
-      await window.api.copyToClipboard(url);
-      addToast('Receipt copied! You can PASTE (Ctrl+V) it in WhatsApp.', 'info');
+      try {
+        const url = await window.api.getReceiptPreview(sale);
+        await window.api.copyToClipboard(url);
+        addToast('Receipt copied! You can PASTE (Ctrl+V) it in WhatsApp.', 'info');
+      } catch (err) {
+        console.error('Copy preview failed:', err);
+      }
+    }
+    setWhatsappModal({ open: true, sale, phone: '' });
+  };
+
+  const confirmWhatsApp = async () => {
+    const { sale, phone } = whatsappModal;
+    if (!phone || phone.length < 10) {
+      addToast('Enter a valid 10-digit number', 'error');
+      return;
     }
 
-    const now = new Date(sale.date || sale.created_at || new Date());
-    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    
-    // We import useApp so we can read appSettings, but ShareReceipts already pulled appSettings inside useApp? No, let's pull appSettings.
-    // Wait, ShareReceipts didn't destruct appSettings from useApp previously!
-    // I need to add appSettings to the destructuring.
-    // I'll assume they will be included below.
-    const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
-    const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
-    const taxPct = cgstPct + sgstPct;
-    const grandTotal = sale.total || 0;
-    const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
-    const gstAmt = grandTotal - taxableAmount;
-    
-    let msg = `🧾 *${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
-    msg += `Invoice No: #${sale.id || 'NEW'}\n`;
-    msg += `Date: ${dateStr}\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Items:\n`;
-    
-    (sale.items || []).forEach(item => {
-      msg += `• ${item.name} (x${item.qty})        ₹${(item.price * item.qty).toLocaleString()}\n`;
-    });
-    
-    msg += `\n━━━━━━━━━━━━━━━━\n\n`;
-    msg += `Subtotal:              ₹${taxableAmount.toFixed(0)}\n`;
-    
-    if (taxPct > 0) {
-      msg += `GST (${taxPct}%):             ₹${gstAmt.toFixed(0)}\n`;
+    try {
+      const now = new Date(sale.date || sale.created_at || new Date());
+      const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      
+      const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
+      const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
+      const taxPct = cgstPct + sgstPct;
+      const grandTotal = sale.total || 0;
+      const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
+      const gstAmt = grandTotal - taxableAmount;
+      
+      let msg = `*${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
+      msg += `Invoice: #${sale.id || 'NEW'}\n`;
+      msg += `Date: ${dateStr}\n`;
+      msg += `--------------------------------\n\n`;
+      msg += `*Items:*\n`;
+      
+      (sale.items || []).forEach(item => {
+        msg += `• ${item.name} (x${item.qty}) - ₹${(item.price * item.qty).toLocaleString()}\n`;
+      });
+      
+      msg += `\n--------------------------------\n`;
+      msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      
+      if (taxPct > 0) {
+        msg += `GST (${taxPct}%): ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      }
+      if (sale.discount > 0) {
+        msg += `Discount: -₹${sale.discount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      }
+      
+      msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
+      msg += `--------------------------------\n\n`;
+      
+      const pMode = sale.paymentMethod || sale.payment_method || 'Cash';
+      msg += `Payment: ${pMode.toUpperCase()}\n`;
+      msg += `Status: PAID\n\n`;
+      msg += `Thank you for your purchase!\n`;
+      msg += `We look forward to serving you again.\n\n`;
+      msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
+      if (appSettings?.businessPhone) {
+        msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
+      }
+      
+      let cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+      
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+      
+      if (window.api?.openExternal) {
+        await window.api.openExternal(waUrl);
+      } else {
+        window.open(waUrl, '_blank');
+      }
+      setWhatsappModal({ open: false, sale: null, phone: '' });
+    } catch (err) {
+      addToast('Failed to open WhatsApp', 'error');
+      console.error(err);
     }
-    if (sale.discount > 0) {
-      msg += `Discount:            -₹${sale.discount.toFixed(0)}\n`;
-    }
-    
-    msg += `*Total Amount:*        ₹${grandTotal.toLocaleString()}\n\n`;
-    msg += `━━━━━━━━━━━━━━━━\n\n`;
-    
-    // sale.paymentMethod could be missing in older records
-    const pMode = sale.paymentMethod || sale.payment_method || 'Cash';
-    msg += `Payment Mode: ${pMode.toUpperCase()}\n`;
-    msg += `Status: ${sale.amountPaid >= grandTotal ? 'Paid ✅' : 'Paid ✅'}\n\n`;
-    msg += `Thank you for your purchase! 🙏\n`;
-    msg += `We look forward to serving you again.\n\n`;
-    msg += `📍 ${appSettings?.businessName || 'Sports Zone'}\n`;
-    if (appSettings?.businessPhone) {
-      msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
-    }
-    
-    let cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
-    
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const cardCls = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
@@ -223,7 +245,7 @@ export default function ShareReceipts() {
                       <button 
                         onClick={() => handleDownload(sale)}
                         className={`group p-2.5 rounded-xl border transition-all ${dm ? 'border-blue-800/30 bg-blue-900/20 text-blue-400 hover:bg-blue-600 hover:text-white' : 'border-blue-100 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
-                        title="Download PDF"
+                        title="Download PNG"
                       >
                         <Download className="w-5 h-5 group-hover:translate-y-0.5 transition-transform" />
                       </button>
@@ -288,8 +310,57 @@ export default function ShareReceipts() {
                  onClick={() => handleDownload(previewSale)}
                  className="flex-1 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/30"
                >
-                 <Download className="w-4 h-4" /> Download PDF
+                 <Download className="w-4 h-4" /> Download PNG
                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Modal */}
+      {whatsappModal.open && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setWhatsappModal({ open: false, sale: null, phone: '' })}></div>
+          <div className={`relative w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border-2 ${dm ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                <MessageCircle className="w-10 h-10 text-emerald-600" />
+              </div>
+              <h3 className={`text-2xl font-black tracking-tight mb-2 ${dm ? 'text-white' : 'text-slate-900'}`}>Send to WhatsApp</h3>
+              <p className={`text-sm font-medium mb-8 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                Receipt already copied! Just enter the customer's number and paste (Ctrl+V) on WhatsApp.
+              </p>
+              
+              <div className="relative group">
+                <input 
+                  autoFocus
+                  type="tel"
+                  placeholder="987xxxxxxx"
+                  className={`w-full h-16 px-6 rounded-2xl text-center text-xl font-black outline-none border-4 transition-all
+                    ${dm 
+                      ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10' 
+                      : 'bg-slate-50 border-slate-100 text-slate-800 focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 shadow-inner'}`}
+                  value={whatsappModal.phone}
+                  onChange={e => setWhatsappModal({...whatsappModal, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})}
+                  onKeyDown={e => e.key === 'Enter' && confirmWhatsApp()}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-8">
+                <button 
+                  onClick={() => setWhatsappModal({ open: false, sale: null, phone: '' })}
+                  className={`h-14 rounded-2xl font-bold transition-all ${dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-400 hover:bg-slate-100'}`}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmWhatsApp}
+                  disabled={whatsappModal.phone.length < 10}
+                  className="h-14 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-2xl font-bold shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
+                >
+                  Send Bill
+                </button>
+              </div>
             </div>
           </div>
         </div>
