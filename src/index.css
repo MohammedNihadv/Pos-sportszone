@@ -6,6 +6,37 @@
 
 @layer base {
   * { box-sizing: border-box; }
+  /* Elite RBAC Badges */
+  .rbac-badge {
+    @apply transition-all duration-300 opacity-30 select-none;
+  }
+  .rbac-badge:hover {
+    @apply opacity-100 scale-105;
+  }
+  
+  /* Elite Restricted States */
+  .restricted-container {
+    @apply relative overflow-hidden;
+  }
+  .restricted-blur {
+    @apply opacity-50 blur-[1px] pointer-events-none select-none transition-all duration-500 saturate-50;
+  }
+  .lock-glow {
+    @apply transition-all duration-300;
+  }
+  .lock-glow:hover {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+    transform: scale(1.1);
+  }
+  .glass-overlay {
+    @apply absolute inset-0 bg-white/5 backdrop-blur-[2px] z-10 pointer-events-none;
+  }
+  .dark .glass-overlay {
+    @apply bg-slate-900/10 backdrop-blur-[2px];
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  }
   body {
     @apply font-sans antialiased;
     font-family: 'Inter', sans-serif;

@@ -2,7 +2,8 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
-import isDev from 'electron-is-dev';
+
+const isDev = !app.isPackaged;
 
 let db;
 
@@ -44,9 +45,8 @@ export function initDb() {
   // Migration: Add barcode if it doesn't exist (using try/catch for safety)
   try {
     db.prepare("ALTER TABLE products ADD COLUMN barcode TEXT DEFAULT ''").run();
-  } catch (e) {
     // Column already exists or table is new
-  }
+  } catch (e) { /* ignore */ }
 
   // Sales table
   db.prepare(`
@@ -62,10 +62,10 @@ export function initDb() {
   `).run();
 
   // Migration: Add tender and change tracking
-  try { db.prepare("ALTER TABLE sales ADD COLUMN amount_paid REAL DEFAULT 0").run(); } catch(e){}
-  try { db.prepare("ALTER TABLE sales ADD COLUMN change_amount REAL DEFAULT 0").run(); } catch(e){}
-  try { db.prepare("ALTER TABLE sales ADD COLUMN payment_breakdown JSON").run(); } catch(e){}
-  try { db.prepare("ALTER TABLE sales ADD COLUMN change_return_method TEXT").run(); } catch(e){}
+  try { db.prepare("ALTER TABLE sales ADD COLUMN amount_paid REAL DEFAULT 0").run(); } catch(e){ /* ignore */ }
+  try { db.prepare("ALTER TABLE sales ADD COLUMN change_amount REAL DEFAULT 0").run(); } catch(e){ /* ignore */ }
+  try { db.prepare("ALTER TABLE sales ADD COLUMN payment_breakdown JSON").run(); } catch(e){ /* ignore */ }
+  try { db.prepare("ALTER TABLE sales ADD COLUMN change_return_method TEXT").run(); } catch(e){ /* ignore */ }
 
   // Expenses table
   db.prepare(`
@@ -139,6 +139,43 @@ export function initDb() {
       action TEXT NOT NULL,
       details TEXT,
       timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+
+  // Customers table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT UNIQUE,
+      email TEXT,
+      orders INTEGER DEFAULT 0,
+      total REAL DEFAULT 0,
+      last_order TEXT
+    )
+  `).run();
+
+  // Credits (Pay Later) table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS credits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER,
+      customer_name TEXT,
+      total REAL NOT NULL,
+      paid REAL DEFAULT 0,
+      pending REAL DEFAULT 0,
+      date TEXT DEFAULT CURRENT_DATE,
+      items TEXT
+    )
+  `).run();
+
+  // Remote Commands table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS remote_commands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      command TEXT NOT NULL,
+      status TEXT DEFAULT 'pending', -- pending, executed
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 
@@ -261,14 +298,14 @@ export function repairDatabase() {
             const ic = bdb.pragma('integrity_check');
             if (ic[0]?.integrity_check === 'ok') {
               let salesCount = 0;
-              try { salesCount = bdb.prepare('SELECT COUNT(*) as c FROM sales').get().c; } catch {}
+              try { salesCount = bdb.prepare('SELECT COUNT(*) as c FROM sales').get().c; } catch (e) { /* ignore */ }
               if (salesCount >= bestSalesCount) {
                 bestSalesCount = salesCount;
                 bestBackup = fp;
               }
             }
             bdb.close();
-          } catch {}
+          } catch (e) { /* ignore */ }
         }
       } catch {}
     }
@@ -276,9 +313,9 @@ export function repairDatabase() {
     if (bestBackup) {
       // Safety rename corrupted DB
       const corruptedPath = dbPath + '.corrupted.' + Date.now();
-      try { fs.renameSync(dbPath + '-wal', dbPath + '-wal.corrupted.' + Date.now()); } catch {}
-      try { fs.renameSync(dbPath + '-shm', dbPath + '-shm.corrupted.' + Date.now()); } catch {}
-      try { fs.renameSync(dbPath, corruptedPath); } catch {}
+      try { fs.renameSync(dbPath + '-wal', dbPath + '-wal.corrupted.' + Date.now()); } catch (e) { /* ignore */ }
+      try { fs.renameSync(dbPath + '-shm', dbPath + '-shm.corrupted.' + Date.now()); } catch (e) { /* ignore */ }
+      try { fs.renameSync(dbPath, corruptedPath); } catch (e) { /* ignore */ }
       
       // Copy best backup as new DB
       fs.copyFileSync(bestBackup, dbPath);
@@ -295,7 +332,7 @@ export function repairDatabase() {
     initDb();
     return { success: false, error: 'All repair methods failed. No healthy backup found.' };
   } catch (err) {
-    try { initDb(); } catch {}
+    try { initDb(); } catch (e) { /* ignore */ }
     return { success: false, error: err.message };
   }
 }
@@ -317,7 +354,7 @@ export function closeDb() {
     checkpointInterval = null;
   }
   if (db) {
-    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch {}
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { /* ignore */ }
     db.close();
     db = null;
   }
@@ -341,4 +378,102 @@ export function saveUser(user) {
       .run(user.name, user.role, user.pin);
   }
 }
+
+// Customer Methods
+export function getCustomers() {
+  return getDb().prepare('SELECT * FROM customers ORDER BY name').all();
+}
+
+export function saveCustomer(c) {
+  // If we have an ID, it's an update
+  if (c.id) {
+    getDb().prepare('UPDATE customers SET name = ?, phone = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+      .run(c.name, c.phone, c.email, c.orders || 0, c.total || 0, c.last_order || null, c.id);
+    return c.id;
+  }
+  
+  // Try to find if customer exists by phone to prevent duplicates
+  if (c.phone) {
+    const existing = getDb().prepare('SELECT id FROM customers WHERE phone = ?').get(c.phone);
+    if (existing) {
+      getDb().prepare('UPDATE customers SET name = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+        .run(c.name, c.email, c.orders || 0, c.total || 0, c.last_order || null, existing.id);
+      return existing.id;
+    }
+  }
+
+  // If we have a name, try to find by name if phone not provided or not found
+  const existingByName = getDb().prepare('SELECT id FROM customers WHERE name = ?').get(c.name);
+  if (existingByName) {
+    getDb().prepare('UPDATE customers SET phone = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+      .run(c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null, existingByName.id);
+    return existingByName.id;
+  }
+
+  // New customer
+  const info = getDb().prepare('INSERT INTO customers (name, phone, email, orders, total, last_order) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(c.name, c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null);
+  return info.lastInsertRowid;
+}
+
+export function updateCustomerStats(nameOrId, amount, date) {
+  const db = getDb();
+  let customer;
+  if (typeof nameOrId === 'number') {
+    customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(nameOrId);
+  } else {
+    customer = db.prepare('SELECT id FROM customers WHERE name = ?').get(nameOrId);
+  }
+
+  if (customer) {
+    db.prepare(`
+      UPDATE customers 
+      SET orders = orders + 1, 
+          total = total + ?, 
+          last_order = ? 
+      WHERE id = ?
+    `).run(amount, date, customer.id);
+  }
+}
+
+export function deleteCustomer(id) {
+  return getDb().prepare('DELETE FROM customers WHERE id = ?').run(id);
+}
+
+// Credit Methods
+export function getCredits() {
+  return getDb().prepare('SELECT * FROM credits ORDER BY date DESC').all();
+}
+
+export function saveCredit(cr) {
+  if (cr.id) {
+    return getDb().prepare('UPDATE credits SET customer_id=?, customer_name=?, total=?, paid=?, pending=?, items=? WHERE id=?')
+      .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.items, cr.id);
+  }
+  return getDb().prepare('INSERT INTO credits (customer_id, customer_name, total, paid, pending, date, items) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.date || new Date().toISOString().split('T')[0], cr.items);
+}
+
+export function deleteCredit(id) {
+  return getDb().prepare('DELETE FROM credits WHERE id = ?').run(id);
+}
+
+// Remote Commands
+export function getPendingRemoteCommands() {
+  return getDb().prepare("SELECT * FROM remote_commands WHERE status = 'pending'").all();
+}
+
+export function markRemoteCommandExecuted(id) {
+  return getDb().prepare("UPDATE remote_commands SET status = 'executed' WHERE id = ?").run(id);
+}
+
+export function addRemoteCommand(command) {
+  return getDb().prepare("INSERT INTO remote_commands (command) VALUES (?)").run(command);
+}
+
+// Audit Logs
+export function clearAuditLogs() {
+  return getDb().prepare('DELETE FROM audit_logs').run();
+}
+
 

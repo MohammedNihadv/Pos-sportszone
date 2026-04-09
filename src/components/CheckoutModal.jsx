@@ -1,19 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, CheckCircle, Banknote, Smartphone, ArrowRight, RotateCcw, Clock, AlertCircle, Download, MessageCircle, Copy } from 'lucide-react';
+import { X, CheckCircle, Banknote, Smartphone, ArrowRight, RotateCcw, Clock, AlertCircle, Download, MessageCircle, Copy, Search, User, Plus } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
 /**
  * Advanced Checkout Modal
- * 
- * Supports:
- * - Single payment: Cash / UPI / Card
- * - Split payment: e.g. ₹600 UPI + ₹400 Cash
- * - Cash change calculation + change return method
- * - Keyboard shortcuts (C=Cash, U=UPI, Enter=Complete, Esc=Close)
- * - Touch-friendly large buttons
- * - Receipt summary before completion
  */
 
 const PAYMENT_METHODS = [
@@ -26,8 +18,10 @@ const QUICK_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
 export default function CheckoutModal({ onClose, onComplete, dm }) {
   const { cart, discount, setDiscount, discountAmount, grandTotal: total, subtotal, clearCart } = useCart();
-  const { appSettings } = useApp();
-  // Step: 'method' → 'amount' → 'change' → 'success'
+  const { appSettings, customers, addToast } = useApp();
+  
+  // Progress State: 'method' → 'amount' → 'change' → 'receipt' → 'success'
+  // Special: 'credit' step for Pay Later
   const [step, setStep] = useState('method');
   const [payments, setPayments] = useState([]); // [{method, amount}]
   const [currentMethod, setCurrentMethod] = useState(null);
@@ -35,11 +29,17 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
   const [changeReturnMethod, setChangeReturnMethod] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [completedSale, setCompletedSale] = useState(null);
-  // Pay Later state
+  
+  // Pay Later / Credit state
   const [creditCustomerName, setCreditCustomerName] = useState('');
+  const [creditCustomerPhone, setCreditCustomerPhone] = useState('');
   const [creditAmountPaid, setCreditAmountPaid] = useState('0');
-  const [whatsappPhone, setWhatsappPhone] = useState('');
-  const [showWhatsappInput, setShowWhatsappInput] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  
+  // WhatsApp state
+  const [whatsappModal, setWhatsappModal] = useState({ open: false, phone: '' });
+  
   const inputRef = useRef(null);
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
@@ -49,24 +49,23 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
 
   // Focus input when entering amount step
   useEffect(() => {
-    if (step === 'amount' && inputRef.current) {
+    if ((step === 'amount' || step === 'credit') && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [step]);
 
-
-  const selectMethod = (method) => {
+  const selectMethod = useCallback((method) => {
     playSound('tap');
     setCurrentMethod(method);
     if (method === 'credit') {
-      setStep('credit'); // Go to Pay Later screen
+      setStep('credit');
     } else {
       setAmountInput(method === 'cash' ? '' : String(remaining));
       setStep('amount');
     }
-  };
+  }, [remaining]);
 
-  const addPayment = (method, amount) => {
+  const addPayment = useCallback((method, amount) => {
     const newPayments = [...payments, { method, amount: parseFloat(amount) || 0 }];
     setPayments(newPayments);
     const newTotal = newPayments.reduce((s, p) => s + p.amount, 0);
@@ -74,23 +73,22 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     if (newTotal >= total) {
       const change = newTotal - total;
       if (change > 0 && newPayments.some(p => p.method === 'cash')) {
-        setStep('change'); // Need to decide how to return change
+        setStep('change');
       } else {
         setStep('receipt');
       }
     } else {
-      // Need more payment — go back to method selection
       setCurrentMethod(null);
       setStep('method');
     }
-  };
+  }, [payments, total]);
 
-  const confirmAmount = () => {
+  const confirmAmount = useCallback(() => {
     playSound('click');
     const amt = parseFloat(amountInput);
     if (!amt || amt <= 0) return;
     addPayment(currentMethod || 'cash', amt);
-  };
+  }, [amountInput, currentMethod, addPayment]);
 
   const payExact = () => {
     addPayment('cash', remaining);
@@ -124,7 +122,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     playSound('success');
     setStep('success');
     onComplete(salePayload);
-  }, [total, cart, payments, totalPaid, overpaid, changeReturnMethod, onComplete, isProcessing]);
+  }, [total, cart, payments, totalPaid, overpaid, changeReturnMethod, onComplete, isProcessing, discountAmount]);
 
   const resetAll = () => {
     setPayments([]);
@@ -134,13 +132,63 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     setStep('method');
   };
 
-  // Keyboard shortcuts
+  // Customer Filtering for Credit
+  const filteredCustomers = (customers || []).filter(c => 
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
+    c.phone.includes(customerSearch)
+  );
+
+  const selectCustomer = (c) => {
+    setCreditCustomerName(c.name);
+    setCreditCustomerPhone(c.phone || '');
+    setCustomerSearch(c.name);
+    setShowCustomerDropdown(false);
+  };
+
+  const finalizeCredit = useCallback(() => {
+    if (!creditCustomerName.trim()) {
+      addToast('Please enter or select a customer', 'warning');
+      return;
+    }
+    const paid = parseFloat(creditAmountPaid) || 0;
+    const pending = total - paid;
+    
+    const existing = (customers || []).find(c => c.name.toLowerCase() === creditCustomerName.toLowerCase());
+
+    const creditSale = {
+      total,
+      items: cart,
+      payments: paid > 0 ? [{ method: 'cash', amount: paid }] : [],
+      amountPaid: paid,
+      changeAmount: 0,
+      changeReturnMethod: null,
+      paymentMethod: 'credit',
+      creditCustomer: creditCustomerName.trim(),
+      customerPhone: creditCustomerPhone.trim(),
+      creditPending: pending,
+      discount: discountAmount || 0,
+      date: new Date().toISOString(),
+    };
+
+    setCompletedSale(creditSale);
+    playSound('success');
+    setStep('success');
+    onComplete(creditSale);
+  }, [creditCustomerName, creditCustomerPhone, creditAmountPaid, total, cart, onComplete, customers, discountAmount, addToast]);
+
+  // Keyboard shortcuts — skip when user is typing in an input/textarea/select
   useEffect(() => {
     const handler = (e) => {
+      const tag = e.target.tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
       if (step === 'method') {
-        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); selectMethod('cash'); }
-        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); selectMethod('upi'); }
-        if (e.key === 'p' || e.key === 'P') { e.preventDefault(); selectMethod('credit'); }
+        // Only fire letter-shortcuts when NOT typing in a form field
+        if (!isTyping) {
+          if (e.key === 'c' || e.key === 'C') { e.preventDefault(); selectMethod('cash'); }
+          if (e.key === 'u' || e.key === 'U') { e.preventDefault(); selectMethod('upi'); }
+          if (e.key === 'p' || e.key === 'P') { e.preventDefault(); selectMethod('credit'); }
+        }
         if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       }
       if (step === 'amount') {
@@ -148,8 +196,10 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
         if (e.key === 'Escape') { e.preventDefault(); setStep('method'); }
       }
       if (step === 'change') {
-        if (e.key === 'c' || e.key === 'C') { e.preventDefault(); setChangeReturnMethod('cash'); }
-        if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setChangeReturnMethod('store-upi'); }
+        if (!isTyping) {
+          if (e.key === 'c' || e.key === 'C') { e.preventDefault(); setChangeReturnMethod('cash'); }
+          if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setChangeReturnMethod('store-upi'); }
+        }
         if (e.key === 'Enter' && changeReturnMethod) { e.preventDefault(); finalize(); }
       }
       if (step === 'receipt') {
@@ -161,7 +211,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  });
+  }, [step, currentMethod, changeReturnMethod, onClose, finalize, selectMethod, confirmAmount]);
 
   const methodLabel = (m) => {
     if (m === 'cash') return 'Cash';
@@ -170,119 +220,103 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
     return m;
   };
 
-  const finalizeCredit = useCallback(() => {
-    if (!creditCustomerName.trim()) return;
-    const paid = parseFloat(creditAmountPaid) || 0;
-    const pending = total - paid;
-
-    const creditSale = {
-      total,
-      items: cart,
-      payments: paid > 0 ? [{ method: 'cash', amount: paid }] : [],
-      amountPaid: paid,
-      changeAmount: 0,
-      changeReturnMethod: null,
-      paymentMethod: 'credit',
-      creditCustomer: creditCustomerName.trim(),
-      creditPending: pending,
-      discount: discountAmount || 0,
-      date: new Date().toISOString(),
-    };
-
-    // Persist credit to localStorage
-    const newCredit = {
-      id: Date.now(),
-      customer: creditCustomerName.trim(),
-      total,
-      paid,
-      pending,
-      date: new Date().toISOString().split('T')[0],
-      items: cart.map(i => i.name).join(', '),
-    };
-    try {
-      const existing = JSON.parse(localStorage.getItem('sz_credits') || '[]');
-      localStorage.setItem('sz_credits', JSON.stringify([newCredit, ...existing]));
-    } catch (_) {}
-
-    setCompletedSale(creditSale);
-    playSound('success');
-    setStep('success');
-    onComplete(creditSale);
-  }, [creditCustomerName, creditAmountPaid, total, cart, onComplete]);
-
   // ─── WhatsApp Bill Sharing ───
-  const sendWhatsAppBill = async (sale, phone) => {
+  const handleWhatsApp = async () => {
+    playSound('pop');
     if (window.api?.getReceiptPreview && window.api?.copyToClipboard) {
-      const url = await window.api.getReceiptPreview(sale);
-      await window.api.copyToClipboard(url);
+      try {
+        const url = await window.api.getReceiptPreview(completedSale);
+        await window.api.copyToClipboard(url);
+        addToast('Receipt copied! You can PASTE (Ctrl+V) it in WhatsApp.', 'info');
+      } catch (err) {
+        console.error('Copy preview failed:', err);
+      }
+    }
+    setWhatsappModal({ open: true, phone: (completedSale.customerPhone || '').replace('+91', '') });
+  };
+
+  const confirmWhatsApp = async () => {
+    const { phone } = whatsappModal;
+    if (!phone || phone.length < 10) {
+      addToast('Enter a valid 10-digit number', 'error');
+      return;
     }
 
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    
-    const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
-    const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
-    const taxPct = cgstPct + sgstPct;
-    const grandTotal = sale.total || 0;
-    const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
-    const gstAmt = grandTotal - taxableAmount;
-    
-    let msg = `*${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
-    msg += `Invoice: #${sale.id || 'NEW'}\n`;
-    msg += `Date: ${dateStr}\n`;
-    msg += `--------------------------------\n\n`;
-    msg += `*Items:*\n`;
-    
-    (sale.items || []).forEach(item => {
-      msg += `• ${item.name} (x${item.qty}) - ₹${(item.price * item.qty).toLocaleString()}\n`;
-    });
-    
-    msg += `\n--------------------------------\n`;
-    msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
-    
-    if (taxPct > 0) {
-      msg += `GST (${taxPct}%): ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
-    }
-    if (sale.discount > 0) {
-      msg += `Discount: -₹${sale.discount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
-    }
-    
-    msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
-    msg += `--------------------------------\n\n`;
-    
-    let pMode = sale.paymentMethod ? methodLabel(sale.paymentMethod) : 'Cash';
-    if (pMode === 'Split') pMode = (sale.paymentBreakdown || []).map(p => methodLabel(p.method)).join(' + ');
-    
-    msg += `Payment: ${pMode.toUpperCase()}\n`;
-    msg += `Status: PAID\n\n`;
-    msg += `Thank you for your purchase!\n`;
-    msg += `We look forward to serving you again.\n\n`;
-    msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
-    if (appSettings?.businessPhone) {
-      msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
-    }
-    
-    let cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
-    
-    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
-    if (window.api?.openExternal) {
-      await window.api.openExternal(waUrl);
-    } else {
-      window.open(waUrl, '_blank');
+    try {
+      const sale = completedSale;
+      const now = new Date(sale.date || new Date());
+      const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      
+      const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
+      const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
+      const taxPct = cgstPct + sgstPct;
+      const grandTotal = sale.total || 0;
+      const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
+      const gstAmt = grandTotal - taxableAmount;
+      
+      let msg = `*${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
+      msg += `Invoice: #${sale.id || 'NEW'}\n`;
+      msg += `Date: ${dateStr}\n`;
+      msg += `--------------------------------\n\n`;
+      msg += `*Items:*\n`;
+      
+      (sale.items || []).forEach(item => {
+        msg += `• ${item.name} (x${item.qty}) - ₹${(item.price * item.qty).toLocaleString()}\n`;
+      });
+      
+      msg += `\n--------------------------------\n`;
+      msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      
+      if (taxPct > 0) {
+        msg += `GST (${taxPct}%): ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      }
+      if (sale.discount > 0) {
+        msg += `Discount: -₹${sale.discount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      }
+      
+      msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
+      msg += `--------------------------------\n\n`;
+      
+      let pMode = sale.paymentMethod ? methodLabel(sale.paymentMethod) : 'Cash';
+      if (pMode === 'Split') pMode = (sale.paymentBreakdown || []).map(p => methodLabel(p.method)).join(' + ');
+      
+      msg += `Payment: ${pMode.toUpperCase()}\n`;
+      msg += `Status: PAID\n\n`;
+      msg += `Thank you for your purchase!\n`;
+      msg += `We look forward to serving you again.\n\n`;
+      msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
+      if (appSettings?.businessPhone) {
+        msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
+      }
+      
+      let cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+      
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+      
+      if (window.api?.openExternal) {
+        await window.api.openExternal(waUrl);
+      } else {
+        window.open(waUrl, '_blank');
+      }
+      setWhatsappModal({ open: false, phone: '' });
+    } catch (err) {
+      addToast('Failed to open WhatsApp', 'error');
+      console.error(err);
     }
   };
 
   // ─── Render ────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className={`rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className={`rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden ${dm ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
         
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-bold">
               {step === 'method' && 'Checkout'}
+              {step === 'credit' && 'Record Credit (Pay Later)'}
               {step === 'amount' && `${methodLabel(currentMethod)} Payment`}
               {step === 'change' && 'Return Change'}
               {step === 'receipt' && 'Review & Pay'}
@@ -307,7 +341,9 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
             <p className={`text-xs font-bold uppercase tracking-wider ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
               {isFullyPaid ? '✓ Fully Paid' : `Remaining to Pay:`}
             </p>
-            <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{remaining.toFixed(2)}</p>
+            <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
+              ₹{(step === 'credit' ? (total - (parseFloat(creditAmountPaid) || 0)) : remaining).toFixed(2)}
+            </p>
           </div>
           
           {step === 'method' && (
@@ -324,8 +360,8 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
           )}
         </div>
 
-        {/* Payment Chips (show what's been paid so far) */}
-        {payments.length > 0 && step !== 'receipt' && (
+        {/* Payment Chips */}
+        {payments.length > 0 && step !== 'receipt' && step !== 'success' && (
           <div className={`px-6 py-2 flex flex-wrap gap-2 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
             {payments.map((p, i) => (
               <span key={i} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold
@@ -375,71 +411,126 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
           {/* ─── STEP: Pay Later / Credit ─── */}
           {step === 'credit' && (
             <div className="space-y-4">
-              <div className={`flex items-start gap-3 p-3 rounded-xl ${dm ? 'bg-amber-900/30 border border-amber-700' : 'bg-amber-50 border border-amber-200'}`}>
-                <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className={`text-sm ${dm ? 'text-amber-300' : 'text-amber-700'}`}>
-                  Customer pays partially or fully later. A pending credit will be recorded.
+              <div className={`p-3 rounded-xl border flex gap-3 ${dm ? 'bg-amber-900/10 border-amber-900/50' : 'bg-amber-50 border-amber-100'}`}>
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <p className={`text-[11px] leading-relaxed ${dm ? 'text-amber-400' : 'text-amber-700'}`}>
+                   Recoding credit requires customer identification. Please provide a name and mobile number.
                 </p>
               </div>
+              
+              <div className="space-y-4">
+                <div className="relative">
+                  <label className={`text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Customer Name *
+                  </label>
+                    <input
+                      ref={inputRef}
+                      autoFocus
+                      type="text"
+                      value={customerSearch}
+                      onChange={e => {
+                        setCustomerSearch(e.target.value);
+                        setCreditCustomerName(e.target.value);
+                        setShowCustomerDropdown(true);
+                      }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      onBlur={() => {
+                        // Increased delay to ensure selection registers
+                        setTimeout(() => setShowCustomerDropdown(false), 400);
+                      }}
+                      placeholder="e.g. Ramesh Kumar"
+                      className={`w-full px-3 py-2.5 rounded-lg text-sm border outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-amber-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-amber-500'}`}
+                    />
 
-              <div>
-                <label className={`text-sm font-medium mb-2 block ${dm ? 'text-slate-300' : 'text-slate-600'}`}>
-                  Customer Name *
-                </label>
-                <input
-                  autoFocus
-                  type="text"
-                  value={creditCustomerName}
-                  onChange={e => setCreditCustomerName(e.target.value)}
-                  placeholder="e.g. Rahul, Regular Customer..."
-                  className={`w-full px-4 py-3 border-2 rounded-xl text-base outline-none transition-all
-                    ${dm ? 'bg-slate-800 border-slate-600 text-white focus:border-amber-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-amber-400'}`}
-                />
+                  {/* Dropdown */}
+                  {showCustomerDropdown && (customerSearch.length > 0) && (
+                    <div className={`absolute z-20 w-full mt-1 max-h-48 overflow-y-auto rounded-xl border shadow-xl ${dm ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                      {filteredCustomers.length > 0 ? (
+                        filteredCustomers.map(c => (
+                          <button
+                            key={c.id}
+                            onMouseDown={() => selectCustomer(c)}
+                            className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left hover:bg-amber-50 text-slate-800 transition-colors border-b last:border-0 ${dm ? 'border-slate-700 text-slate-300' : 'border-slate-100 text-slate-800'}`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold">{c.name}</span>
+                              <span className="text-xs opacity-60">{c.phone}</span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 opacity-30" />
+                          </button>
+                        ))
+                      ) : (
+                        <div className={`px-4 py-3 text-xs italic ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
+                          New customer will be created
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative group">
+                      <input
+                        type="tel"
+                        value={creditCustomerPhone}
+                        onChange={e => setCreditCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="e.g. 9876543210"
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm border outline-none transition-all pr-10
+                          ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'} 
+                          ${creditCustomerPhone.length === 10 
+                            ? (dm ? 'border-emerald-500/50 focus:border-emerald-500 bg-emerald-500/5' : 'border-emerald-200 focus:border-emerald-500 bg-emerald-50') 
+                            : 'focus:border-amber-500'}`}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {creditCustomerPhone.length === 10 ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-500 animate-in zoom-in duration-300" />
+                        ) : (
+                          <div className={`w-1.5 h-1.5 rounded-full ${creditCustomerPhone.length > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={`text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Paid Now (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={creditAmountPaid}
+                      onChange={e => setCreditAmountPaid(e.target.value)}
+                      className={`w-full px-3 py-2.5 rounded-lg text-sm border outline-none font-bold transition-all ${dm ? 'bg-slate-900 border-slate-700 text-emerald-400 focus:border-emerald-500' : 'bg-white border-slate-200 text-emerald-600 focus:border-emerald-500'}`}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className={`text-sm font-medium mb-2 block ${dm ? 'text-slate-300' : 'text-slate-600'}`}>
-                  Amount Paid Now (₹) <span className={`text-xs ml-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>Leave 0 for full credit</span>
-                </label>
-                <input
-                  type="number"
-                  value={creditAmountPaid}
-                  onChange={e => setCreditAmountPaid(e.target.value)}
-                  min="0"
-                  max={total}
-                  className={`w-full px-4 py-3 border-2 rounded-xl text-2xl font-bold text-center outline-none transition-all
-                    ${dm ? 'bg-slate-800 border-slate-600 text-white focus:border-amber-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-amber-400'}`}
-                />
+              {/* Pending Preview */}
+              <div className={`p-4 rounded-xl border-t-2 border-dashed flex justify-between items-center ${dm ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                <span className={`font-semibold text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Bill</span>
+                <span className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{total.toFixed(2)}</span>
+              </div>
+              
+              <div className={`p-4 rounded-xl flex justify-between items-center ${dm ? 'bg-amber-900/10' : 'bg-amber-50'}`}>
+                <span className={`font-bold text-sm ${dm ? 'text-amber-500' : 'text-amber-600'}`}>Pending Balance</span>
+                <span className="text-xl font-bold text-amber-700">₹{(total - (parseFloat(creditAmountPaid) || 0)).toFixed(2)}</span>
               </div>
 
-              {/* Pending Balance Preview */}
-              {(() => {
-                const paid = parseFloat(creditAmountPaid) || 0;
-                const pending = total - paid;
-                return pending > 0 ? (
-                  <div className={`flex justify-between items-center p-3 rounded-xl font-semibold ${dm ? 'bg-red-900/30 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
-                    <span className={`text-sm ${dm ? 'text-red-300' : 'text-red-700'}`}>Pending Balance</span>
-                    <span className={`text-lg ${dm ? 'text-red-300' : 'text-red-600'}`}>₹{pending.toFixed(2)}</span>
-                  </div>
-                ) : (
-                  <div className={`flex justify-between items-center p-3 rounded-xl ${dm ? 'bg-emerald-900/30 border border-emerald-700' : 'bg-emerald-50 border border-emerald-200'}`}>
-                    <span className={`text-sm font-semibold ${dm ? 'text-emerald-300' : 'text-emerald-700'}`}>✓ Fully Paid</span>
-                  </div>
-                );
-              })()}
-
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => { setStep('method'); setCurrentMethod(null); }}
-                  className={`py-3 rounded-xl font-semibold text-sm border-2 transition-all
-                    ${dm ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                  ← Back
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button 
+                  onClick={() => { setStep('method'); setCurrentMethod(null); }}
+                  className={`py-2.5 rounded-xl text-sm font-semibold border ${dm ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                  Cancel
                 </button>
                 <button
                   onClick={finalizeCredit}
-                  disabled={!creditCustomerName.trim()}
-                  className="py-3 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  disabled={!creditCustomerName.trim() || creditCustomerPhone.length !== 10}
+                  className="py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                 >
-                  <Clock className="w-4 h-4" /> Record Credit
+                  <CheckCircle className="w-4 h-4" /> Record Credit
                 </button>
               </div>
             </div>
@@ -617,7 +708,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
             </div>
           )}
 
-          {/* ─── STEP 5: Success + Receipt Download ─── */}
+          {/* ─── STEP 5: Success + Share ─── */}
           {step === 'success' && completedSale && (
             <div className="space-y-4">
               <div className="text-center py-2">
@@ -625,7 +716,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                   <CheckCircle className="w-10 h-10 text-emerald-600" />
                 </div>
                 <p className={`font-bold text-xl ${dm ? 'text-white' : 'text-slate-800'}`}>₹{completedSale.total.toFixed(2)} Paid!</p>
-                <p className={`text-sm mt-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sale recorded successfully</p>
+                <p className={`text-sm mt-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Transaction recorded successfully</p>
               </div>
 
               <div className={`rounded-xl border divide-y text-sm ${dm ? 'bg-slate-800 border-slate-700 divide-slate-700' : 'bg-slate-50 border-slate-200 divide-slate-200'}`}>
@@ -641,76 +732,88 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
                     <span className="font-bold text-amber-600">₹{completedSale.changeAmount.toFixed(2)}</span>
                   </div>
                 )}
-              </div>
-
-              {/* WhatsApp Phone Input (shown when clicked) */}
-              {showWhatsappInput && (
-                <div className={`rounded-xl border p-3 space-y-2 ${dm ? 'bg-slate-800 border-slate-700' : 'bg-green-50 border-green-200'}`}>
-                  <label className={`text-xs font-semibold block ${dm ? 'text-slate-300' : 'text-slate-600'}`}>
-                    📱 Customer's WhatsApp Number
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="tel"
-                      autoFocus
-                      value={whatsappPhone}
-                      onChange={e => setWhatsappPhone(e.target.value)}
-                      placeholder="e.g. 9876543210"
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm border outline-none transition-all
-                        ${dm ? 'bg-slate-900 border-slate-600 text-white focus:border-green-500' : 'bg-white border-slate-200 focus:border-green-500'}`}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && whatsappPhone.length >= 10) {
-                          sendWhatsAppBill(completedSale, whatsappPhone);
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (whatsappPhone.length >= 10) {
-                          sendWhatsAppBill(completedSale, whatsappPhone);
-                        }
-                      }}
-                      disabled={whatsappPhone.length < 10}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-all disabled:opacity-40"
-                    >
-                      Send
-                    </button>
+                {completedSale.creditCustomer && (
+                  <div className="px-4 py-2.5 flex justify-between bg-amber-50/50">
+                    <span className={dm ? 'text-slate-400' : 'text-slate-500'}>Credit Customer</span>
+                    <span className="font-bold text-amber-700">{completedSale.creditCustomer}</span>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={async () => {
                     playSound('click');
-                    if (window.api?.downloadReceiptPng) {
-                       await window.api.downloadReceiptPng(completedSale);
-                    }
+                    if (window.api?.downloadReceiptPng) await window.api.downloadReceiptPng(completedSale);
                   }}
                   className={`py-3 rounded-xl font-semibold text-xs border-2 flex flex-col items-center justify-center gap-1.5 transition-all
-                    ${dm ? 'border-slate-600 text-slate-300 hover:border-blue-500 hover:text-blue-400' : 'border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                    ${dm ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-blue-500 hover:text-blue-400' : 'border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'}`}
                 >
                   <Download className="w-4 h-4" /> Receipt
                 </button>
                 <button
-                  onClick={() => { playSound('click'); setShowWhatsappInput(v => !v); }}
+                  onClick={handleWhatsApp}
                   className={`py-3 rounded-xl font-semibold text-xs border-2 flex flex-col items-center justify-center gap-1.5 transition-all
-                    ${showWhatsappInput
-                      ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-200'
-                      : dm ? 'border-slate-600 text-slate-300 hover:border-green-500 hover:text-green-400' : 'border-slate-200 text-slate-600 hover:border-green-400 hover:text-green-600 hover:bg-green-50'
+                    ${whatsappModal.open
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-green-200'
+                      : dm ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-emerald-500 hover:text-emerald-400' : 'border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50'
                     }`}
                 >
-                  <MessageCircle className="w-4 h-4" /> WhatsApp
+                  <MessageCircle className="w-4 h-4 text-emerald-500" /> WhatsApp
                 </button>
                 <button
-                  onClick={() => {
-                    clearCart();
-                    onClose();
-                  }}
-                  className="py-3 bg-blue-600 text-white rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 hover:bg-blue-700 transition-all"
+                  onClick={() => { clearCart(); onClose(); }}
+                  className="py-3 bg-blue-600 text-white rounded-xl font-bold text-xs flex flex-col items-center justify-center gap-1.5 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"
                 >
                   <ArrowRight className="w-4 h-4" /> New Sale
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* WhatsApp Modal Inlay */}
+          {whatsappModal.open && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setWhatsappModal({ open: false, phone: '' })}></div>
+              <div className={`relative w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl border-2 ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <MessageCircle className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <h3 className={`text-xl font-black tracking-tight mb-2 ${dm ? 'text-white' : 'text-slate-900'}`}>WhatsApp Receipt</h3>
+                  <p className={`text-xs font-medium mb-8 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Receipt already copied! Just enter the customer's number and paste (Ctrl+V) on WhatsApp.
+                  </p>
+                  
+                  <input 
+                    autoFocus
+                    type="tel"
+                    placeholder="987xxxxxxx"
+                    className={`w-full h-16 px-6 rounded-2xl text-center text-xl font-black outline-none border-4 transition-all
+                      ${dm 
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500/50' 
+                        : 'bg-slate-50 border-slate-100 text-slate-800 focus:border-emerald-500/50 shadow-inner'}`}
+                    value={whatsappModal.phone}
+                    onChange={e => setWhatsappModal({...whatsappModal, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})}
+                    onKeyDown={e => e.key === 'Enter' && confirmWhatsApp()}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3 mt-8">
+                    <button 
+                      onClick={() => setWhatsappModal({ open: false, phone: '' })}
+                      className={`h-14 rounded-2xl font-bold transition-all ${dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-400 hover:bg-slate-100'}`}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={confirmWhatsApp}
+                      disabled={whatsappModal.phone.length < 10}
+                      className="h-14 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-2xl font-bold shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
+                    >
+                      Send Bill
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

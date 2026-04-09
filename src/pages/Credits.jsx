@@ -52,11 +52,11 @@ export default function Credits() {
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Credit / Pay Later</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Customers with pending balances</p>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Credit / Pay Later</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Customers with pending balances</p>
         </div>
         {totalPending > 0 && (
           <div className={`flex items-center gap-2 px-4 py-2 rounded-xl ${dm ? 'bg-red-900/30 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
@@ -121,8 +121,8 @@ export default function Credits() {
 
       {/* Settle Modal */}
       {settleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className={`w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) setSettleModal(null); }}>
+          <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
             <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
               <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Record Payment — {settleModal.customer}</h3>
               <button onClick={() => setSettleModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>

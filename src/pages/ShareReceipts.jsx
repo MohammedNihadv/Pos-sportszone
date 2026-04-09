@@ -114,7 +114,18 @@ export default function ShareReceipts() {
       msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
       msg += `--------------------------------\n\n`;
       
-      const pMode = sale.paymentMethod || sale.payment_method || 'Cash';
+      const methodLabel = (m) => {
+        if (m === 'cash') return 'Cash';
+        if (m === 'upi') return 'UPI';
+        if (m === 'credit') return 'Pay Later';
+        return m;
+      };
+
+      let pMode = sale.paymentMethod || sale.payment_method || 'Cash';
+      if (pMode === 'split' || pMode === 'Split') {
+        pMode = (sale.paymentBreakdown || []).map(p => methodLabel(p.method)).join(' + ');
+      }
+      
       msg += `Payment: ${pMode.toUpperCase()}\n`;
       msg += `Status: PAID\n\n`;
       msg += `Thank you for your purchase!\n`;

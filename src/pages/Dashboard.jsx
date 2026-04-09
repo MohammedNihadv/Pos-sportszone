@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, Sector
 } from 'recharts';
-import { IndianRupee, TrendingUp, TrendingDown, AlertCircle, Receipt, ArrowUpRight, ArrowDownRight, PackageX, Users } from 'lucide-react';
+import { IndianRupee, TrendingUp, TrendingDown, AlertCircle, Receipt, ArrowUpRight, ArrowDownRight, PackageX, Users, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 
 export default function Dashboard() {
-  const { darkMode, products, sales, expenses, purchases, currentUser, isAdminUnlocked, isOwner } = useApp();
+  const { darkMode, products, sales, expenses, purchases, currentUser, isAdminUnlocked, isOwner, appSettings } = useApp();
   const dm = darkMode;
   const showFinancials = isOwner || isAdminUnlocked;
   const navigate = useNavigate();
@@ -44,37 +44,45 @@ export default function Dashboard() {
   }, [sales]);
 
   const totalExpense = useMemo(() => {
-     const now = new Date();
-     const currentMonth = now.getMonth();
-     const currentYear = now.getFullYear();
-     return (expenses || []).reduce((sum, e) => {
-        const d = new Date(e.date || e.created_at);
-        if (!isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-           return sum + (e.amount || 0);
-        }
-        return sum;
-     }, 0);
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return (expenses || []).reduce((sum, e) => {
+      const d = new Date(e.date || e.created_at);
+      if (!isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+        return sum + (e.amount || 0);
+      }
+      return sum;
+    }, 0);
   }, [expenses]);
 
-  const pendingPayments = useMemo(() => 
+  const pendingPayments = useMemo(() =>
     (purchases || []).reduce((sum, p) => sum + ((p.total || 0) - (p.paid || 0)), 0),
-  [purchases]);
+    [purchases]);
 
   const chartData = useMemo(() => {
     // Generate last 7 days for chart
-    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    return [0,1,2,3,4,5,6].map(offset => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const cgstPct = parseFloat(appSettings?.cgstRate) || 0;
+    const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
+    const taxRate = (cgstPct + sgstPct) / 100;
+
+    return [0, 1, 2, 3, 4, 5, 6].map(offset => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - offset));
       const dayStr = d.toISOString().split('T')[0];
       const daySalesArr = (sales || []).filter(s => (s.date || s.created_at || '').startsWith(dayStr));
       const daySales = daySalesArr.reduce((sum, s) => sum + (s.total || 0), 0);
+
+      // Calculate net revenue (excluding tax) for real profit calculation
+      const netRevenue = taxRate > 0 ? daySales / (1 + taxRate) : daySales;
+
       const dayCost = daySalesArr.reduce((sum, s) => {
         return sum + (s.items || []).reduce((itemSum, item) => itemSum + ((item.cost || 0) * item.qty), 0);
       }, 0);
-      return { day: days[d.getDay()], sales: daySales, profit: daySales - dayCost }; 
+      return { day: days[d.getDay()], sales: daySales, profit: netRevenue - dayCost };
     });
-  }, [sales]);
+  }, [sales, appSettings]);
 
   // Inventory Health - FIXED Logic
   const { lowStock, outOfStock } = useMemo(() => {
@@ -102,7 +110,7 @@ export default function Dashboard() {
 
   // Top VIP Customers
   const topCustomers = useMemo(() => {
-    return (sales || []).slice().sort((a,b) => (b.total || 0) - (a.total || 0)).slice(0, 5);
+    return (sales || []).slice().sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 5);
   }, [sales]);
 
   const topProducts = useMemo(() => {
@@ -114,7 +122,7 @@ export default function Dashboard() {
     });
     return Object.entries(itemCounts)
       .map(([name, qty]) => ({ name, sales: qty }))
-      .sort((a,b) => b.sales - a.sales)
+      .sort((a, b) => b.sales - a.sales)
       .slice(0, 5);
   }, [sales]);
 
@@ -186,11 +194,13 @@ export default function Dashboard() {
           title="Total Expenses" amount={showFinancials ? `₹${totalExpense.toLocaleString()}` : '₹ ***'}
           trend={showFinancials ? "All categories" : "Restricted"} trendUp={false}
           icon={<Receipt className="w-5 h-5" />} color="purple"
+          isRestricted={!showFinancials}
         />
         <KPICard dm={dm} card={card}
           title="Pending Payments" amount={showFinancials ? `₹${pendingPayments.toLocaleString()}` : '₹ ***'}
           trend={showFinancials ? "Supplier dues" : "Restricted"} trendUp={false}
           icon={<AlertCircle className="w-5 h-5" />} color="red"
+          isRestricted={!showFinancials}
         />
       </div>
 
@@ -205,8 +215,8 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-2">
               {['Daily', 'Weekly', 'Monthly'].map(t => (
-                <button 
-                  key={t} 
+                <button
+                  key={t}
                   onClick={() => setChartRange(t)}
                   className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors 
                     ${chartRange === t ? 'bg-blue-600 text-white' : (dm ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100')}`}
@@ -216,16 +226,16 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <defs>
                 <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={dm ? '#334155' : '#f1f5f9'} vertical={false} />
@@ -246,7 +256,7 @@ export default function Dashboard() {
         <div className={`${card} p-5`}>
           <h3 className={`font-semibold mb-0.5 ${dm ? 'text-white' : 'text-slate-800'}`}>Top Selling Products</h3>
           <p className={`text-xs mb-4 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Best performers this month</p>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
             <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dm ? '#334155' : '#f1f5f9'} />
               <XAxis type="number" domain={[0, maxTopProducts]} tick={{ fill: dm ? '#94a3b8' : '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -271,23 +281,23 @@ export default function Dashboard() {
           </div>
           {paymentSplit.length > 0 ? (
             <div className="h-[200px] flex items-center justify-center relative">
-               <ResponsiveContainer width="100%" height="100%">
-                 <PieChart>
-                   <Pie data={paymentSplit} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" animationDuration={800} stroke="none">
-                     {paymentSplit.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                   </Pie>
-                   <Tooltip 
-                      contentStyle={{ background: dm ? '#1e293b' : '#fff', border: 'none', borderRadius: 8, color: dm ? '#f1f5f9' : '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(v) => `₹${v.toLocaleString()}`}
-                   />
-                 </PieChart>
-               </ResponsiveContainer>
-               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className={`text-sm font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
-                  <span className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
-                    ₹{paymentSplit.reduce((s,o)=>s+o.value,0).toLocaleString()}
-                  </span>
-               </div>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                <PieChart>
+                  <Pie data={paymentSplit} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" animationDuration={800} stroke="none">
+                    {paymentSplit.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ background: dm ? '#1e293b' : '#fff', border: 'none', borderRadius: 8, color: dm ? '#f1f5f9' : '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(v) => `₹${v.toLocaleString()}`}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className={`text-sm font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total</span>
+                <span className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
+                  ₹{paymentSplit.reduce((s, o) => s + o.value, 0).toLocaleString()}
+                </span>
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-slate-400">No payment data yet</div>
@@ -295,7 +305,7 @@ export default function Dashboard() {
           <div className="flex justify-center gap-6 mt-2">
             {paymentSplit.map(p => (
               <div key={p.name} className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}></span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></span>
                 <span className={`text-xs font-medium ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{p.name}</span>
               </div>
             ))}
@@ -357,12 +367,12 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-800' : 'divide-slate-50'}`}>
-              {sales.slice(0, 5).map(s => (
+              {(sales || []).slice(0, 5).map(s => (
                 <tr key={s.id} className={`transition-colors text-sm ${dm ? 'hover:bg-slate-800/50 bg-slate-900' : 'hover:bg-blue-50/50 bg-white'}`}>
                   <td className="px-5 py-4 font-bold text-blue-600">INV-{s.id}</td>
-                  <td className={`px-5 py-4 font-medium ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Walk-in Customer</td>
-                  <td className={`px-5 py-4 text-right font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.items.length}</td>
-                  <td className={`px-5 py-4 text-right font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{s.total.toLocaleString()}</td>
+                  <td className={`px-5 py-4 font-medium ${dm ? 'text-slate-300' : 'text-slate-700'}`}>{s.customer_name || 'Walk-in Customer'}</td>
+                  <td className={`px-5 py-4 text-right font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.items?.length || 0}</td>
+                  <td className={`px-5 py-4 text-right font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{(s.total || 0).toLocaleString()}</td>
                   <td className="px-5 py-4 text-center">
                     <span className={`inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md uppercase font-bold tracking-wider ${s.paymentMethod === 'Cash' ? (dm ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : (dm ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700')}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-current"></span> Paid {s.paymentMethod}
@@ -379,7 +389,7 @@ export default function Dashboard() {
   );
 }
 
-function KPICard({ title, amount, trend, trendUp, icon, color, card, dm }) {
+function KPICard({ title, amount, trend, trendUp, icon, color, card, dm, isRestricted }) {
   const colors = {
     green: { bg: 'bg-green-100', text: 'text-green-600', dark: 'bg-green-900/30' },
     blue: { bg: 'bg-blue-100', text: 'text-blue-600', dark: 'bg-blue-900/30' },
@@ -388,15 +398,18 @@ function KPICard({ title, amount, trend, trendUp, icon, color, card, dm }) {
   }[color];
 
   return (
-    <div className={`${card} p-5`}>
+    <div className={`${card} p-5 relative overflow-hidden group`}>
+      {isRestricted && <div className="glass-overlay rounded-2xl" />}
       <div className="flex justify-between items-start">
         <p className={`text-sm font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{title}</p>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${dm ? colors.dark : colors.bg} ${colors.text}`}>
-          {icon}
+          {isRestricted ? <Lock className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" /> : icon}
         </div>
       </div>
-      <p className={`text-3xl font-bold mt-3 mb-1.5 ${dm ? 'text-white' : 'text-slate-800'}`}>{amount}</p>
-      <div className={`text-xs font-medium flex items-center gap-1 ${trendUp ? 'text-green-600' : 'text-red-500'}`}>
+      <p className={`text-3xl font-bold mt-3 mb-1.5 ${dm ? 'text-white' : 'text-slate-800'} ${isRestricted ? 'blur-[2px] opacity-40' : ''}`}>
+        {amount}
+      </p>
+      <div className={`text-xs font-medium flex items-center gap-1 ${trendUp ? 'text-green-600' : 'text-red-500'} ${isRestricted ? 'opacity-40' : ''}`}>
         {trendUp ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
         {trend}
       </div>

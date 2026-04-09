@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
   // ─── NEW: Logging & Audit ───
   getRecentLogs: () => ipcRenderer.invoke('get-recent-logs'),
   getAuditLogs: () => ipcRenderer.invoke('get-audit-logs'),
+  clearAuditLogs: () => ipcRenderer.invoke('clear-audit-logs'),
   logRendererError: (data) => ipcRenderer.invoke('log-renderer-error', data),
 
   // ─── NEW: Security & Auth ───
@@ -84,6 +85,16 @@ contextBridge.exposeInMainWorld('api', {
   downloadReceiptPng: (sale) => ipcRenderer.invoke('download-receipt-png', sale),
   getReceiptPreview: (sale) => ipcRenderer.invoke('get-receipt-preview', sale),
   copyToClipboard: (dataUrl) => ipcRenderer.invoke('copy-image-to-clipboard', dataUrl),
+
+  // ─── NEW: Credit Management ───
+  getCredits: () => ipcRenderer.invoke('get-credits'),
+  saveCredit: (credit) => ipcRenderer.invoke('save-credit', credit),
+  deleteCredit: (id) => ipcRenderer.invoke('delete-credit', id),
+  
+  // ─── NEW: Customer Management ───
+  getCustomers: () => ipcRenderer.invoke('get-customers'),
+  saveCustomer: (customer) => ipcRenderer.invoke('save-customer', customer),
+  deleteCustomer: (id) => ipcRenderer.invoke('delete-customer', id),
 
   // ─── Utility ───
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),

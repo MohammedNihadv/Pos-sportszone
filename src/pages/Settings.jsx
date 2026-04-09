@@ -1,23 +1,31 @@
-import { useState, useEffect } from 'react';
-import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download, Calculator } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download, Calculator, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+
+const MasterLock = () => (
+  <div className="flex items-center gap-2 ml-auto cursor-help px-2.5 py-1.5 rounded-xl bg-red-500/5 border border-red-500/10 transition-all hover:bg-red-500/10 shadow-sm shadow-red-500/5">
+    <span className="text-[10px] font-black text-red-500 uppercase tracking-[0.15em] shrink-0">Restricted</span>
+    <Lock className="w-3.5 h-3.5 text-red-500/60" />
+  </div>
+);
 
 export default function Settings() {
   const ctx = useApp();
-  const { 
-    darkMode, setDarkMode, addToast, logo, setLogo, 
-    updateAdminPin, 
-    users, setUsers, 
-    currentUser, setCurrentUser, 
+  const {
+    darkMode, setDarkMode, addToast, logo, setLogo,
+    updateAdminPin,
+    users, setUsers,
+    currentUser, setCurrentUser,
     appSettings, saveAppSettings,
     categories, setCategories,
     expenseCategories, setExpenseCategories,
     suppliers, setSuppliers,
-    isOwner
+    isOwner, isAdminUnlocked, isOnline
   } = ctx;
 
-  const [localSettings, setLocalSettings] = useState(appSettings);
-  
+
+  const [localSettings, setLocalSettings] = useState(() => ({ ...appSettings }));
+
   // Data Management States
   const [newCat, setNewCat] = useState('');
   const [newExpCat, setNewExpCat] = useState('');
@@ -25,10 +33,7 @@ export default function Settings() {
 
   const dm = darkMode;
 
-  // Keep local settings in sync with global appSettings
-  useEffect(() => {
-    setLocalSettings(appSettings);
-  }, [appSettings]);
+
 
   const save = async () => {
     await saveAppSettings(localSettings);
@@ -38,7 +43,7 @@ export default function Settings() {
   const handleToggle = async (key) => {
     const newVal = !localSettings[key];
     setLocalSettings(prev => ({ ...prev, [key]: newVal }));
-    
+
     // Most robust: Only send the tiny delta to saveAppSettings
     // This prevents stale keys in localSettings from overwriting other global settings
     await saveAppSettings({ [key]: newVal });
@@ -121,13 +126,16 @@ export default function Settings() {
       return;
     }
 
+    const uid = Number(pinChange.userId);
+    if (isNaN(uid)) return;
+
     try {
       if (window.api) {
-        const success = await window.api.updatePin({ 
-          userId: Number(pinChange.userId), 
-          newPin: pinChange.newPin 
+        const success = await window.api.updatePin({
+          userId: uid,
+          newPin: pinChange.newPin
         });
-        
+
         if (success) {
           addToast('Security PIN updated successfully!', 'success');
           setPinChange({ userId: null, newPin: '', confirmPin: '' });
@@ -171,7 +179,7 @@ export default function Settings() {
   if (!localSettings) {
     return (
       <div className="flex items-center justify-center h-full p-20 text-slate-500 font-medium italic">
-        <RefreshCw className="w-5 h-5 animate-spin mr-2" /> 
+        <RefreshCw className="w-5 h-5 animate-spin mr-2" />
         Loading preferences...
       </div>
     );
@@ -187,7 +195,7 @@ export default function Settings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
-        
+
         {/* 
           ==============================
           LEFT COLUMN: System Preferences 
@@ -197,11 +205,11 @@ export default function Settings() {
 
           {/* Business Identity */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-6 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-              <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center">
-                <Store className="w-4 h-4 text-blue-600" />
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5 text-blue-600" />
               </div>
-              Business Identity
+              <span>Business Identity</span>
             </h3>
 
             <div className="space-y-6">
@@ -212,65 +220,76 @@ export default function Settings() {
                 <div className="flex-1 w-full sm:w-auto space-y-2">
                   <input
                     className={`w-full px-3 py-2 rounded-lg text-base font-bold border-2 outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-900'} focus:border-blue-500`}
-                    value={localSettings.businessName}
-                    onChange={e => setLocalSettings({...localSettings, businessName: e.target.value})}
+                    value={localSettings.businessName || ''}
+                    readOnly={isOwner}
+                    onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, businessName: e.target.value }))}
                     placeholder="e.g. Sports Zone"
                   />
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
-                    <Upload className="w-3.5 h-3.5" /> Change Logo
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                  </label>
+                  {!isOwner && (
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all">
+                      <Upload className="w-3.5 h-3.5" /> Change Logo
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                    </label>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className={labelCls}>GST Identification</label><input className={inputCls} value={localSettings.businessGstin} onChange={e => setLocalSettings({...localSettings, businessGstin: e.target.value})} /></div>
-                  <div><label className={labelCls}>Official Phone</label><input className={inputCls} value={localSettings.businessPhone} onChange={e => setLocalSettings({...localSettings, businessPhone: e.target.value})} /></div>
+                  <div><label className={labelCls}>GST Identification</label><input className={inputCls} readOnly={isOwner} value={localSettings.businessGstin || ''} onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, businessGstin: e.target.value }))} /></div>
+                  <div><label className={labelCls}>Official Phone</label><input className={inputCls} readOnly={isOwner} value={localSettings.businessPhone || ''} onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, businessPhone: e.target.value }))} /></div>
                 </div>
-                <div><label className={labelCls}>Email Address</label><input className={inputCls} value={localSettings.businessEmail} onChange={e => setLocalSettings({...localSettings, businessEmail: e.target.value})} /></div>
-                <div><label className={labelCls}>Physical Address</label><textarea className={`${inputCls} resize-none`} rows={2} value={localSettings.businessAddress} onChange={e => setLocalSettings({...localSettings, businessAddress: e.target.value})} /></div>
+                <div><label className={labelCls}>Email Address</label><input className={inputCls} readOnly={isOwner} value={localSettings.businessEmail || ''} onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, businessEmail: e.target.value }))} /></div>
+                <div><label className={labelCls}>Physical Address</label><textarea className={`${inputCls} resize-none`} readOnly={isOwner} rows={2} value={localSettings.businessAddress || ''} onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, businessAddress: e.target.value }))} /></div>
               </div>
             </div>
           </div>
 
           {/* Tax Configuration */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <div className="w-8 h-8 rounded-lg bg-emerald-600/10 flex items-center justify-center text-emerald-600 text-sm font-bold">₹</div>
-               Tax Details
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-emerald-600/10 flex items-center justify-center shrink-0 text-emerald-600 text-base font-black">₹</div>
+              <span>Tax Details</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelCls}>CGST %</label>
-                 <input type="number" step="0.01" className={inputCls} value={localSettings.cgstRate} onChange={(e) => setLocalSettings({...localSettings, cgstRate: e.target.value})} />
-              </div>
-              <div><label className={labelCls}>SGST %</label>
-                 <input type="number" step="0.01" className={inputCls} value={localSettings.sgstRate} onChange={(e) => setLocalSettings({...localSettings, sgstRate: e.target.value})} />
+            <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+              {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelCls}>CGST %</label>
+                  <input type="number" step="0.01" className={inputCls} readOnly={isOwner} value={localSettings.cgstRate || ''} onChange={(e) => !isOwner && setLocalSettings(prev => ({ ...prev, cgstRate: e.target.value }))} />
+                </div>
+                <div><label className={labelCls}>SGST %</label>
+                  <input type="number" step="0.01" className={inputCls} readOnly={isOwner} value={localSettings.sgstRate || ''} onChange={(e) => !isOwner && setLocalSettings(prev => ({ ...prev, sgstRate: e.target.value }))} />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Account Balances - NEW SECTION */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center text-blue-600">
-                  <Calculator className="w-4 h-4" />
-               </div>
-               Account Balances
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center shrink-0">
+                <Calculator className="w-5 h-5 text-blue-600" />
+              </div>
+              <span>Account Balances</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
             </h3>
-            <p className={`text-xs mb-4 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Manually adjust current system balances for accounting corrections.</p>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className={labelCls}>Cash Balance</label>
-                <input type="number" step="0.01" className={inputCls} value={localSettings.cashBalance} onChange={(e) => setLocalSettings({...localSettings, cashBalance: e.target.value})} />
-              </div>
-              <div>
-                <label className={labelCls}>UPI Balance</label>
-                <input type="number" step="0.01" className={inputCls} value={localSettings.upiBalance} onChange={(e) => setLocalSettings({...localSettings, upiBalance: e.target.value})} />
-              </div>
-              <div>
-                <label className={labelCls}>Bank Balance</label>
-                <input type="number" step="0.01" className={inputCls} value={localSettings.bankBalance} onChange={(e) => setLocalSettings({...localSettings, bankBalance: e.target.value})} />
+            <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+              {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+              <p className={`text-xs mb-4 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Manually adjust current system balances for accounting corrections.</p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className={labelCls}>Cash Balance</label>
+                  <input type="number" step="0.01" className={inputCls} readOnly={isOwner} value={localSettings.cashBalance} onChange={(e) => !isOwner && setLocalSettings(prev => ({ ...prev, cashBalance: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>UPI Balance</label>
+                  <input type="number" step="0.01" className={inputCls} readOnly={isOwner} value={localSettings.upiBalance} onChange={(e) => !isOwner && setLocalSettings(prev => ({ ...prev, upiBalance: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={labelCls}>Bank Balance</label>
+                  <input type="number" step="0.01" className={inputCls} readOnly={isOwner} value={localSettings.bankBalance} onChange={(e) => !isOwner && setLocalSettings(prev => ({ ...prev, bankBalance: e.target.value }))} />
+                </div>
               </div>
             </div>
           </div>
@@ -278,67 +297,84 @@ export default function Settings() {
 
           {/* Security & Access */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Shield className="w-4 h-4 text-orange-500" /> Security & Access
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Lock Screen</p>
-                  <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Lock cashier session when idle</p>
-                </div>
-                <button 
-                  onClick={() => !isOwner && handleToggle('autoLockEnabled')} 
-                  disabled={isOwner} 
-                  className={toggleCls(localSettings.autoLockEnabled) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}
-                >
-                  <span className={thumbCls(localSettings.autoLockEnabled)} />
-                </button>
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-orange-600/10 flex items-center justify-center shrink-0">
+                <Shield className="w-5 h-5 text-orange-500" />
               </div>
-
-              {localSettings.autoLockEnabled && (
-                <div className={`pt-4 border-t flex items-center justify-between ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
+              <span>Security & Access</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
+            </h3>
+            <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+              {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <label className={`font-medium text-sm block mb-1 ${dm ? 'text-white' : 'text-slate-800'}`}>Lock Timeout (mins)</label>
+                    <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Lock Screen</p>
+                    <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Lock cashier session when idle</p>
                   </div>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="60"
-                    className={`${inputCls} max-w-[100px] text-center ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`}
-                    value={localSettings.autoLockTimeout} 
-                    onChange={e => !isOwner && setLocalSettings({...localSettings, autoLockTimeout: parseInt(e.target.value) || 1})}
-                    readOnly={isOwner}
-                  />
+                  <button
+                    onClick={() => !isOwner && handleToggle('autoLockEnabled')}
+                    disabled={isOwner}
+                    className={toggleCls(localSettings.autoLockEnabled) + (isOwner ? ' opacity-50 cursor-not-allowed' : '')}
+                  >
+                    <span className={thumbCls(localSettings.autoLockEnabled)} />
+                  </button>
                 </div>
-              )}
+
+                {localSettings.autoLockEnabled && (
+                  <div className={`pt-4 border-t flex items-center justify-between ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
+                    <div>
+                      <label className={`font-medium text-sm block mb-1 ${dm ? 'text-white' : 'text-slate-800'}`}>Lock Timeout (mins)</label>
+                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      className={`${inputCls} max-w-[100px] text-center ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      value={localSettings.autoLockTimeout}
+                      onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, autoLockTimeout: parseInt(e.target.value) || 1 }))}
+                      readOnly={isOwner}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Receipt & Printing */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Printer className="w-4 h-4 text-blue-600" /> Receipt & Printing
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelCls}>Printer Engine</label>
-                <select className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.printerType} onChange={e => !isOwner && setLocalSettings({...localSettings, printerType: e.target.value})} disabled={isOwner}>
-                  <option>Thermal (80mm)</option>
-                  <option>Thermal (58mm)</option>
-                  <option>A4 Paper</option>
-                  <option>A5 Paper</option>
-                </select>
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center shrink-0">
+                <Printer className="w-5 h-5 text-blue-600" />
               </div>
-              <div><label className={labelCls}>Print Copies</label>
-                <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} min="1" max="5" value={localSettings.printerCopies} onChange={e => !isOwner && setLocalSettings({...localSettings, printerCopies: e.target.value})} readOnly={isOwner} />
+              <span>Receipt & Printing</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
+            </h3>
+            <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+              {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelCls}>Printer Engine</label>
+                  <select className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} value={localSettings.printerType} onChange={e => !isOwner && setLocalSettings({ ...localSettings, printerType: e.target.value })} disabled={isOwner}>
+                    <option>Thermal (80mm)</option>
+                    <option>Thermal (58mm)</option>
+                    <option>A4 Paper</option>
+                    <option>A5 Paper</option>
+                  </select>
+                </div>
+                <div><label className={labelCls}>Print Copies</label>
+                  <input type="number" className={`${inputCls} ${isOwner ? 'opacity-70 cursor-not-allowed' : ''}`} min="1" max="5" value={localSettings.printerCopies} onChange={e => !isOwner && setLocalSettings(prev => ({ ...prev, printerCopies: e.target.value }))} readOnly={isOwner} />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Interface Preferences */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Moon className="w-4 h-4 text-indigo-500" /> Interface Preferences
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center shrink-0">
+                <Moon className="w-5 h-5 text-indigo-500" />
+              </div>
+              <span>Interface Preferences</span>
             </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -362,10 +398,14 @@ export default function Settings() {
 
           {/* Cloud Sync */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <RefreshCw className="w-4 h-4 text-sky-500" /> Cloud Sync
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-sky-600/10 flex items-center justify-center shrink-0">
+                <RefreshCw className="w-5 h-5 text-sky-500" />
+              </div>
+              <span>Cloud Sync</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
             </h3>
-            <div className="flex items-center justify-between">
+            <div className={`flex items-center justify-between ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
               <div>
                 <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Auto Cloud Sync</p>
                 <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Automatically push data to cloud every 5 mins</p>
@@ -378,15 +418,18 @@ export default function Settings() {
 
           {/* Software Update — Explicitly for Owner/Admin */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Download className="w-4 h-4 text-emerald-500" /> System Update
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-emerald-600/10 flex items-center justify-center shrink-0">
+                <Download className="w-5 h-5 text-emerald-500" />
+              </div>
+              <span>System Update</span>
             </h3>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Software Maintenance</p>
                 <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Current Version: v3.0.6</p>
               </div>
-              <button 
+              <button
                 onClick={async () => {
                   if (window.api?.checkForUpdates) {
                     const res = await window.api.checkForUpdates();
@@ -405,12 +448,15 @@ export default function Settings() {
 
           {/* Account Security - New Section */}
           <div className={`${card} p-6`}>
-            <h3 className={`font-bold mb-6 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
-               <Shield className="w-4 h-4 text-blue-500" /> Account Security
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center shrink-0">
+                <Shield className="w-5 h-5 text-blue-500" />
+              </div>
+              <span>Account Security</span>
             </h3>
-            
+
             <div className="space-y-6">
-              {users.filter(u => isOwner ? u.role === 'Owner' : true).map(user => (
+              {(users || []).filter(u => isOwner ? u.role === 'Owner' : true).map(user => (
                 <div key={user.id} className={`p-4 rounded-xl border ${dm ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -423,14 +469,14 @@ export default function Settings() {
                       </div>
                     </div>
                     {pinChange.userId !== user.id ? (
-                      <button 
+                      <button
                         onClick={() => setPinChange({ userId: user.id, newPin: '', confirmPin: '' })}
                         className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all"
                       >
                         Change PIN
                       </button>
                     ) : (
-                      <button 
+                      <button
                         onClick={() => setPinChange({ userId: null, newPin: '', confirmPin: '' })}
                         className={`p-1.5 rounded-lg ${dm ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-400 hover:bg-slate-200'} transition-all`}
                       >
@@ -444,28 +490,28 @@ export default function Settings() {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">New 4-Digit PIN</label>
-                          <input 
-                            type="password" 
+                          <input
+                            type="password"
                             maxLength={4}
                             className={inputCls}
                             value={pinChange.newPin}
-                            onChange={e => setPinChange({...pinChange, newPin: e.target.value.replace(/\D/g, '')})}
+                            onChange={e => setPinChange({ ...pinChange, newPin: e.target.value.replace(/\D/g, '') })}
                             placeholder="****"
                           />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Confirm PIN</label>
-                          <input 
-                            type="password" 
+                          <input
+                            type="password"
                             maxLength={4}
                             className={inputCls}
                             value={pinChange.confirmPin}
-                            onChange={e => setPinChange({...pinChange, confirmPin: e.target.value.replace(/\D/g, '')})}
+                            onChange={e => setPinChange({ ...pinChange, confirmPin: e.target.value.replace(/\D/g, '') })}
                             placeholder="****"
                           />
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={handleUpdatePin}
                         className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-600/20"
                       >
@@ -477,9 +523,48 @@ export default function Settings() {
               ))}
             </div>
           </div>
-
+          {/* System Maintenance */}
+          <div className={`${card} p-6`}>
+            <h3 className={`font-bold mb-6 flex items-center gap-4 text-xl tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>
+              <div className="w-10 h-10 rounded-xl bg-red-600/10 flex items-center justify-center shrink-0">
+                <Database className="w-5 h-5 text-red-500" />
+              </div>
+              <span>System Maintenance</span>
+              {isOwner && !isAdminUnlocked && <MasterLock />}
+            </h3>
+            <div className={`group relative flex items-center justify-between gap-4 p-4 rounded-xl border border-red-100 bg-red-50/30 dark:border-red-500/10 dark:bg-red-500/5 transition-all ${isOwner && !isAdminUnlocked ? 'hover:bg-red-500/10' : ''}`}>
+              {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl z-10" />}
+              <div className={`relative z-0 flex items-center justify-between w-full ${isOwner && !isAdminUnlocked ? 'restricted-blur opacity-50' : ''}`}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className={`font-bold text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Clear Audit Trail</p>
+                  </div>
+                  <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Permanently wipe all activity logs (Local & Cloud)</p>
+                </div>
+                <button
+                  disabled={!isAdminUnlocked}
+                  onClick={async () => {
+                    if (window.confirm("CRITICAL ACTION: This will permanently delete all local and cloud audit logs. Proceed?")) {
+                      if (window.api?.clearAuditLogs) {
+                        await window.api.clearAuditLogs();
+                        addToast('Audit trail cleared on this device and cloud', 'success');
+                      } else {
+                        addToast('Clear Audit unavailable in browser mode', 'warning');
+                      }
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-2
+                    ${isAdminUnlocked ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear Logs
+                </button>
+              </div>
+            </div>
+            {!isOnline && <p className="text-[10px] text-red-500 mt-2 font-medium">Internet connection required to clear cloud logs.</p>}
+          </div>
 
         </div>
+
 
         {/* 
           ==============================
@@ -489,65 +574,65 @@ export default function Settings() {
         <div className="space-y-6">
 
           <div className="space-y-6">
-             {/* Inventory Categories */}
-             <div className={`${card} p-5 flex flex-col`}>
-                <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Box className="w-4 h-4 text-orange-500" /> Inventory Categories</h4>
-                {!isOwner && (
-                  <div className="flex gap-2 mb-4">
-                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Category" value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} />
-                    <button onClick={handleAddCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                  </div>
-                )}
-                <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
-                   {categories.map(c => (
-                     <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
-                       <span>{c.name}</span>
-                       {!isOwner && <button onClick={() => handleDeleteCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
-                     </div>
-                   ))}
-                   {categories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No categories configured</p>}
+            {/* Inventory Categories */}
+            <div className={`${card} p-5 flex flex-col`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Box className="w-4 h-4 text-orange-500" /> Inventory Categories</h4>
+              {isAdminUnlocked && (
+                <div className="flex gap-2 mb-4">
+                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Category" value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} />
+                  <button onClick={handleAddCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
                 </div>
-             </div>
+              )}
+              <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+                {(categories || []).map(c => (
+                  <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
+                    <span>{c.name}</span>
+                    {isAdminUnlocked && <button onClick={() => handleDeleteCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
+                  </div>
+                ))}
+                {categories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No categories configured</p>}
+              </div>
+            </div>
 
-             {/* Expense Categories */}
-             <div className={`${card} p-5 flex flex-col`}>
-                <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Receipt className="w-4 h-4 text-purple-500" /> Expense Categories</h4>
-                {!isOwner && (
-                  <div className="flex gap-2 mb-4">
-                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Expense Type" value={newExpCat} onChange={e => setNewExpCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExpCategory()} />
-                    <button onClick={handleAddExpCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                  </div>
-                )}
-                <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
-                   {expenseCategories.map(c => (
-                     <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
-                       <span>{c.name}</span>
-                       {!isOwner && <button onClick={() => handleDeleteExpCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
-                     </div>
-                   ))}
-                   {expenseCategories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No expense categories</p>}
+            {/* Expense Categories */}
+            <div className={`${card} p-5 flex flex-col`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Receipt className="w-4 h-4 text-purple-500" /> Expense Categories</h4>
+              {isAdminUnlocked && (
+                <div className="flex gap-2 mb-4">
+                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Expense Type" value={newExpCat} onChange={e => setNewExpCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddExpCategory()} />
+                  <button onClick={handleAddExpCategory} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
                 </div>
-             </div>
+              )}
+              <div className={`flex flex-col gap-2 max-h-[250px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+                {(expenseCategories || []).map(c => (
+                  <div key={c.id} className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium'}`}>
+                    <span>{c.name}</span>
+                    {isAdminUnlocked && <button onClick={() => handleDeleteExpCategory(c.id)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><X className="w-3.5 h-3.5" /></button>}
+                  </div>
+                ))}
+                {expenseCategories.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No expense categories</p>}
+              </div>
+            </div>
 
-             {/* Suppliers */}
-             <div className={`${card} p-5 flex flex-col`}>
-                <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Truck className="w-4 h-4 text-green-500" /> Authorized Suppliers</h4>
-                {!isOwner && (
-                  <div className="flex gap-2 mb-4">
-                    <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Supplier Name" value={newSup} onChange={e => setNewSup(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
-                    <button onClick={handleAddSupplier} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
-                  </div>
-                )}
-                <div className={`flex flex-col gap-2 max-h-[300px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
-                   {suppliers.map(s => (
-                     <div key={s.id} className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium shadow-sm'}`}>
-                       <span>{s.name}</span>
-                       {!isOwner && <button onClick={() => handleDeleteSupplier(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>}
-                     </div>
-                   ))}
-                   {suppliers.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No suppliers configured</p>}
+            {/* Suppliers */}
+            <div className={`${card} p-5 flex flex-col`}>
+              <h4 className={`font-bold mb-4 flex items-center gap-2 text-sm ${dm ? 'text-white' : 'text-slate-800'}`}><Truck className="w-4 h-4 text-green-500" /> Authorized Suppliers</h4>
+              {isAdminUnlocked && (
+                <div className="flex gap-2 mb-4">
+                  <input className={`${inputCls} flex-1 min-w-0`} placeholder="New Supplier Name" value={newSup} onChange={e => setNewSup(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSupplier()} />
+                  <button onClick={handleAddSupplier} className="px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-colors font-bold"><Plus className="w-4 h-4" /></button>
                 </div>
-             </div>
+              )}
+              <div className={`flex flex-col gap-2 max-h-[300px] overflow-y-auto p-3 rounded-lg border ${dm ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+                {(suppliers || []).map(s => (
+                  <div key={s.id} className={`flex items-center justify-between text-xs px-3 py-2.5 rounded-lg border ${dm ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700 font-medium shadow-sm'}`}>
+                    <span>{s.name}</span>
+                    {isAdminUnlocked && <button onClick={() => handleDeleteSupplier(s.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>}
+                  </div>
+                ))}
+                {suppliers.length === 0 && <p className="text-xs text-slate-400 italic py-1 text-center">No suppliers configured</p>}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -574,3 +659,4 @@ export default function Settings() {
     </div>
   );
 }
+

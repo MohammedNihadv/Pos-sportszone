@@ -18,6 +18,42 @@ export default function SystemHealth() {
   const [dbHealth, setDbHealth] = useState({ success: true });
   const [recovering, setRecovering] = useState(false);
 
+  async function loadData() {
+    if (!window.api) return setLoading(false);
+    
+    try {
+      // Individual awaits to prevent one failure from blocking all data
+      try {
+        const h = await window.api.getSystemHealth();
+        if (h) setHealth(h);
+      } catch (e) { console.error("Health fetch failed", e); }
+
+      try {
+        const l = await window.api.getRecentLogs();
+        setLogs(l || []);
+      } catch (e) { /* ignore */ }
+
+      try {
+        const b = await window.api.getBackups();
+        setBackups(b || []);
+      } catch (e) { /* ignore */ }
+
+      try {
+        const ls = await window.api.getLastSyncTime();
+        setLastSync(ls);
+      } catch (e) { /* ignore */ }
+
+      try {
+        const hCheck = await window.api.getDbHealth();
+        setDbHealth(hCheck || { success: true });
+      } catch (e) { /* ignore */ }
+
+    } catch (err) {
+      console.error("System health load error:", err);
+    }
+    setLoading(false);
+  }
+
   useEffect(() => {
     loadData();
     const handleOnline = () => setIsOnline(true);
@@ -29,42 +65,6 @@ export default function SystemHealth() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      if (window.api) {
-        const [h, l, b] = await Promise.all([
-          window.api.getSystemHealth(),
-          window.api.getRecentLogs(),
-          window.api.getBackups(),
-        ]);
-        setHealth(h);
-        setLogs(l || []);
-        setBackups(b || []);
-        // Load last sync and health
-        try {
-          const [ls, health] = await Promise.all([
-            window.api.getLastSyncTime(),
-            window.api.getDbHealth()
-          ]);
-          setLastSync(ls);
-          setDbHealth(health);
-        } catch {}
-      } else {
-        setHealth({
-          version: '1.0.0',
-          electronVersion: 'N/A (browser)',
-          nodeVersion: 'N/A',
-          platform: 'browser',
-          dbSizeKB: '0',
-          recordCounts: {},
-          uptime: 0,
-        });
-      }
-    } catch {}
-    setLoading(false);
-  }
 
   async function handleBackup() {
     setBackingUp(true);
@@ -140,10 +140,10 @@ export default function SystemHealth() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div>
-        <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>System Health</h2>
-        <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>App diagnostics, backups, and error logs</p>
+        <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>System Health</h2>
+        <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>App diagnostics, backups, and error logs</p>
       </div>
 
       {/* Status Cards */}
@@ -153,8 +153,8 @@ export default function SystemHealth() {
             <Shield className="w-4 h-4 text-blue-500" />
             <p className={`text-xs font-semibold uppercase ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Version</p>
           </div>
-          <p className={`text-2xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>v{health?.version || '?'}</p>
-          <p className={`text-xs mt-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>Electron {health?.electronVersion}</p>
+          <p className={`text-2xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-800'}`}>v{health?.version || '4.0.2'}</p>
+          <p className={`text-[10px] mt-1 font-bold text-slate-400 uppercase`}>Electron {health?.electronVersion || 'Core'}</p>
         </div>
 
         <div className={`${card} p-4`}>
@@ -162,7 +162,7 @@ export default function SystemHealth() {
             <Database className="w-4 h-4 text-emerald-500" />
             <p className={`text-xs font-semibold uppercase ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Database</p>
           </div>
-          <p className={`text-2xl font-bold text-emerald-600`}>{health?.dbSizeKB} KB</p>
+          <p className={`text-2xl font-bold text-emerald-600 tracking-tight`}>{health?.dbSizeKB || '0.0'} <span className="text-xs font-bold text-slate-400">KB</span></p>
           <p className={`text-xs mt-1 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>
             {Object.entries(health?.recordCounts || {}).map(([k, v]) => `${v} ${k}`).join(' · ')}
           </p>

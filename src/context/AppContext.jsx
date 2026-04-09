@@ -44,12 +44,24 @@ const DEFAULT_PRODUCTS = [
   { id: 8, name: 'Shorts Training', sku: 'SH001', barcode: '1008', category: 'Shorts & Tracks', stock: 40, cost: 150, price: 350, emoji: '🩳' },
 ];
 
+const PRODUCT_ICONS = [
+  // Major Sports
+  '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🏒', '🏑', '🏏', '🎿', '🏂', '⛸', '🏹', '🎣', '🚣', '🏊', '🏇', '🚵', '🚴',
+  // Gear & Apparel
+  '👕', '🎽', '👟', '👞', '🥊', '🥋', '🛹', '⛷', '🤿', '🛼', '🪖', '🧢', '👖', '🩳', '🧤',
+  // Achievements & Other
+  '🏆', '🏅', '🥇', '🥈', '🥉', '⏱', '📣', '🚩',
+  // General fallback icons
+  '📦', '🏷️', '💎', '⚡', '📦'
+];
+
 export function AppProvider({ children }) {
-  const [darkMode, setDarkMode] = useState(false);
+  const api = typeof window !== 'undefined' ? window.api : null;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [syncStatus, setSyncStatus] = useState('synced');
   const [isReady, setIsReady] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
   
   // Core Data
   const [products, setProducts] = useState([]);
@@ -59,6 +71,11 @@ export function AppProvider({ children }) {
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUserState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sz_current_user')) || null; }
+    catch { return null; }
+  });
   const [appSettings, setAppSettingsState] = useState({
     businessName: 'Sports Zone',
     businessGstin: '',
@@ -76,50 +93,55 @@ export function AppProvider({ children }) {
     autoLockTimeout: 2
   });
 
-  const [credits, setCredits] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('sz_credits') || '[]'); } catch { return []; }
-  });
-  const [customers, setCustomersState] = useState(() => {
-    try { 
-      const stored = localStorage.getItem('sz_customers');
-      return stored ? JSON.parse(stored) : DEFAULT_CUSTOMERS;
-    } catch { return DEFAULT_CUSTOMERS; }
-  });
+  const [credits, setCreditsState] = useState([]);
+  const [customers, setCustomersState] = useState([]);
 
-  const setCustomers = useCallback((newCustomers) => {
+  const refreshCustomers = useCallback(async () => {
+    if (api) {
+      const dbCust = await api.getCustomers();
+      if (dbCust) setCustomersState(dbCust);
+    }
+  }, [api]);
+
+  const refreshCredits = useCallback(async () => {
+    if (api) {
+      const dbCredits = await api.getCredits();
+      if (dbCredits) setCreditsState(dbCredits);
+    }
+  }, [api]);
+
+  const setCustomers = useCallback(async (newCustomers) => {
     setCustomersState(newCustomers);
-    localStorage.setItem('sz_customers', JSON.stringify(newCustomers));
+    // If it's a bulk replace/add from UI, we might need a bulk save or just wait for single ones
+    // But mostly used for local state updates
   }, []);
 
-  const api = typeof window !== 'undefined' ? window.api : null;
 
-  // ─── Toggles & Preferences (Reactive States) ───
-  const [autoLockEnabled, setAutoLockEnabledState] = useState(appSettings.autoLockEnabled);
-  const [autoLockTimeout, setAutoLockTimeoutState] = useState(appSettings.autoLockTimeout);
-  const [soundEnabled, setSoundEnabledState] = useState(appSettings.soundEnabled);
-
-  // Sync reactive states when appSettings loads or changes
-  useEffect(() => {
-    setDarkMode(appSettings.darkMode);
-    setAutoLockEnabledState(appSettings.autoLockEnabled);
-    setAutoLockTimeoutState(appSettings.autoLockTimeout);
-    setSoundEnabledState(appSettings.soundEnabled);
-  }, [appSettings]);
+  // Derived settings from appSettings
+  const darkMode = appSettings.darkMode;
+  const autoLockEnabled = appSettings.autoLockEnabled;
+  const autoLockTimeout = appSettings.autoLockTimeout;
+  const soundEnabled = appSettings.soundEnabled;
 
   // Fetch initial data
   const loadData = useCallback(async () => {
     if (api) {
       try {
-        const [prod, supp, cats, expCats, sl, ex, pu, settings, dbUsers] = await Promise.all([
+        const [prod, supp, cats, expCats, sl, ex, pu, settings, dbUsers, dbCust, dbCredits] = await Promise.all([
           api.getProducts(), api.getSuppliers(), api.getCategories(),
           api.getExpenseCategories(), api.getSales(), api.getExpenses(), api.getPurchases(),
-          api.getSettings(), api.getUsers()
+          api.getSettings(), api.getUsers(), api.getCustomers(), api.getCredits()
         ]);
         setProducts(prod || []); setSuppliers(supp || []);
         setCategories(cats || []); setExpenseCategories(expCats || []);
         setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
-        setUsers(dbUsers || []);
+        setUsers(dbUsers || []); setCustomersState(dbCust || []); setCreditsState(dbCredits || []);
         
+        try {
+          const ls = await api.getLastSyncTime();
+          setLastSync(ls);
+        } catch {}
+
         if (settings && Object.keys(settings).length > 0) {
           setAppSettingsState(prev => ({ ...prev, ...settings }));
         }
@@ -128,6 +150,7 @@ export function AppProvider({ children }) {
         console.warn('API load failed, using fallback data:', err);
         setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
         setCategories(DEFAULT_CATEGORIES); setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+        setCustomersState(DEFAULT_CUSTOMERS); setCreditsState([]);
         setUsers([
           { id: 1, role: 'Admin', name: 'Admin', pin: '1234' },
           { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
@@ -140,6 +163,8 @@ export function AppProvider({ children }) {
       setSuppliers(DEFAULT_SUPPLIERS);
       setCategories(DEFAULT_CATEGORIES);
       setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+      setCustomersState(DEFAULT_CUSTOMERS);
+      setCreditsState([]);
       setUsers([
         { id: 1, role: 'Admin', name: 'Admin', pin: '1234' },
         { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
@@ -186,6 +211,7 @@ export function AppProvider({ children }) {
     }
   }, [api]);
 
+
   // Security
   const [logo, setLogoState] = useState(() => {
     const stored = localStorage.getItem('sz_logo');
@@ -203,13 +229,19 @@ export function AppProvider({ children }) {
     } catch { return false; }
   });
   
-  const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUserState] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('sz_current_user')) || null; }
-    catch { return null; }
-  });
-
   const [isLocked, setIsLocked] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const setCurrentUser = useCallback((user) => {
     setCurrentUserState(user);
@@ -223,6 +255,17 @@ export function AppProvider({ children }) {
   }, []);
 
   const isOwner = currentUser?.role === 'Owner';
+
+  // Derived sync status
+  const currentSyncStatus = useMemo(() => {
+    if (!isOnline) return 'offline';
+    return syncStatus;
+  }, [isOnline, syncStatus]);
+
+  const PRODUCT_ICONS = [
+    '👕','👟','🩳','🧢','🏐','⚽','🏀','🏏','🎾','🏅','🎒','⌚','🛡️','🏋️','📦','🏸','🏒','🏓','🥊','🥋',
+    '🏹','🎣','⛸️','🎿','🛹','🚴','🏊','🏇','⛳','🎯','🎮','🎫','🏷️','👞','💼','🧴','💊','🕶️','🧊','🧵'
+  ];
 
   const setLogo = useCallback((newLogo) => { setLogoState(newLogo); localStorage.setItem('sz_logo', newLogo); }, []);
   const updateAdminPin = useCallback(async (newPin) => { 
@@ -252,7 +295,7 @@ export function AppProvider({ children }) {
 
   const contextValue = useMemo(() => ({
     darkMode, setDarkMode: (v) => saveAppSettings({ darkMode: v }), sidebarCollapsed, setSidebarCollapsed,
-    toasts, addToast, dismissToast, syncStatus, setSyncStatus,
+    toasts, addToast, dismissToast, syncStatus: currentSyncStatus, setSyncStatus,
     logo, setLogo, isAdminUnlocked, setIsAdminUnlocked, lockAdmin,
     adminPin, updateAdminPin,
     users, setUsers, currentUser, setCurrentUser, isLocked, setIsLocked,
@@ -261,19 +304,19 @@ export function AppProvider({ children }) {
     products, setProducts, suppliers, setSuppliers,
     categories, setCategories, expenseCategories, setExpenseCategories,
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
-    credits, setCredits, customers, setCustomers,
-    appSettings, saveAppSettings, isOwner,
-    refreshProducts, refreshSales, loadData, isReady
+    credits, setCredits: setCreditsState, customers, setCustomers,
+    appSettings, saveAppSettings, isOwner, isOnline, lastSync, setLastSync,
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS
   }), [
-    darkMode, sidebarCollapsed, toasts, syncStatus, logo,
+    darkMode, sidebarCollapsed, toasts, currentSyncStatus, logo,
     isAdminUnlocked, adminPin, users, currentUser, isLocked,
     soundEnabled, autoLockEnabled, autoLockTimeout,
     products, suppliers, categories, expenseCategories,
     sales, expenses, purchases, credits, customers,
-    appSettings, saveAppSettings, isOwner,
+    appSettings, saveAppSettings, isOwner, isOnline, lastSync,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
-    refreshProducts, refreshSales, loadData
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS
   ]);
 
   return (

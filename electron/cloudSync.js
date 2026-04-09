@@ -181,6 +181,25 @@ async function syncUsers(db) {
 export async function runFullSync(db) {
   const results = { success: false, synced: {}, errors: [], lastSync: null };
 
+  // ─── Remote Command Check ───
+  try {
+    const { data: cmd, error: cmdErr } = await supabase
+      .from('cloud_commands')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('command', 'CLEAR_LOGS')
+      .limit(1)
+      .single();
+    
+    if (cmd && !cmdErr) {
+      logInfo('CloudSync:RemoteCommand', 'Received CLEAR_LOGS command from cloud');
+      db.prepare('DELETE FROM audit_logs').run();
+      await supabase.from('cloud_commands').update({ status: 'executed' }).eq('id', cmd.id);
+    }
+  } catch (e) {
+    // Ignore if table doesn't exist yet or other syncing issues
+  }
+
   const syncTasks = [
     { name: 'sales', fn: syncSales },
     { name: 'expenses', fn: syncExpenses },
@@ -189,6 +208,22 @@ export async function runFullSync(db) {
     { name: 'categories', fn: syncCategories },
     { name: 'purchases', fn: syncPurchases },
     { name: 'users', fn: syncUsers },
+    { name: 'customers', fn: async (db) => {
+      const rows = db.prepare('SELECT * FROM customers ORDER BY id').all();
+      if (rows.length === 0) return { table: 'customers', synced: 0 };
+      const payload = rows.map(r => ({ local_id: r.id, name: r.name, phone: r.phone, email: r.email, orders: r.orders, total: r.total, last_order: r.last_order }));
+      const { error } = await supabase.from('cloud_customers').upsert(payload, { onConflict: 'local_id' });
+      if (error) throw error;
+      return { table: 'customers', synced: rows.length };
+    }},
+    { name: 'credits', fn: async (db) => {
+      const rows = db.prepare('SELECT * FROM credits ORDER BY id').all();
+      if (rows.length === 0) return { table: 'credits', synced: 0 };
+      const payload = rows.map(r => ({ local_id: r.id, customer_id: r.customer_id, customer_name: r.customer_name, total: r.total, paid: r.paid, pending: r.pending, date: r.date, items: r.items }));
+      const { error } = await supabase.from('cloud_credits').upsert(payload, { onConflict: 'local_id' });
+      if (error) throw error;
+      return { table: 'credits', synced: rows.length };
+    }},
     { name: 'audit_logs', fn: async (db) => {
       const rows = db.prepare('SELECT * FROM audit_logs ORDER BY id').all();
       if (rows.length === 0) return { table: 'audit_logs', synced: 0 };
@@ -198,6 +233,7 @@ export async function runFullSync(db) {
       return { table: 'audit_logs', synced: rows.length };
     }}
   ];
+
 
   for (const task of syncTasks) {
     try {
@@ -227,7 +263,9 @@ export async function pullFromCloud(db) {
     { local: 'expenses', cloud: 'cloud_expenses' },
     { local: 'sales', cloud: 'cloud_sales' },
     { local: 'purchases', cloud: 'cloud_purchases' },
-    { local: 'users', cloud: 'cloud_users' }
+    { local: 'users', cloud: 'cloud_users' },
+    { local: 'credits', cloud: 'cloud_credits' },
+    { local: 'customers', cloud: 'cloud_customers' }
   ];
 
   for (const t of tables) {

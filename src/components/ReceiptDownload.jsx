@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { Download } from 'lucide-react';
 
@@ -38,10 +38,18 @@ export function ReceiptDownload({ sale, dm }) {
     return m;
   };
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  const invoiceNo = `INV-${Date.now().toString().slice(-6)}`;
+  const [meta, setMeta] = useState({ dateStr: '', timeStr: '', invoiceNo: '' });
+  
+  useEffect(() => {
+    const now = new Date();
+    setMeta({
+      dateStr: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      timeStr: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      invoiceNo: `INV-${Date.now().toString().slice(-6)}`
+    });
+  }, []);
+
+  const { dateStr, timeStr, invoiceNo } = meta;
 
   return (
     <div>

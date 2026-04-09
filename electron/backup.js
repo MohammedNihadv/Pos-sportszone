@@ -64,7 +64,7 @@ export function createBackup() {
 
         if (files.length > 10) {
           files.slice(10).forEach(file => {
-            try { fs.unlinkSync(file.path); } catch (e) {}
+            try { fs.unlinkSync(file.path); } catch (e) { /* ignore deletion errors */ }
           });
         }
       } catch (err) {
@@ -138,7 +138,7 @@ export function restoreBackup(backupPath) {
     // Create a safety backup of CURRENT state before overwriting
     const safetyName = `shop-pre-restore-safety-${Date.now()}.db`;
     getBackupDirs().forEach(dir => {
-      try { fs.copyFileSync(getDbPath(), path.join(dir, safetyName)); } catch(e){}
+      try { fs.copyFileSync(getDbPath(), path.join(dir, safetyName)); } catch(e){ /* ignore safety copy errors */ }
     });
     
     // Crucial: Release SQLite lock on Windows before overwriting
@@ -219,7 +219,7 @@ function setLastBackupTime(time) {
     fs.writeFileSync(metaPath, String(time));
     // Also save in secondary just in case
     if (!isDev) {
-      try { fs.writeFileSync(path.join(getBackupDirs()[1], '.lastbackup'), String(time)); } catch(e){}
+      try { fs.writeFileSync(path.join(getBackupDirs()[1], '.lastbackup'), String(time)); } catch(e){ /* ignore fallback write errors */ }
     }
-  } catch {}
+  } catch (err) { /* ignore metadata write errors */ }
 }

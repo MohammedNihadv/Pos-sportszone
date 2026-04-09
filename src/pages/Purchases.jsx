@@ -12,27 +12,36 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
     invoice: '', items: '', total: '', paid: '', status: 'pending',
     paymentMethod: 'Cash'
   });
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  // Ensure 'Add New' is always first in the render list later
 
   const handleSupplierChange = async (e) => {
     const val = e.target.value;
     if (val === '###NEW###') {
-      const newName = window.prompt('Enter new supplier name:');
-      if (newName?.trim()) {
-        const newSup = { name: newName.trim(), phone: '' };
-        if (window.api) {
-          const saved = await window.api.saveSupplier(newSup);
-          setSuppliers(prev => [...prev, saved]);
-        } else {
-          setSuppliers(prev => [...prev, { ...newSup, id: Date.now() }]);
-        }
-        setForm(p => ({ ...p, supplier: newSup.name }));
-        addToast(`Supplier ${newSup.name} added`, 'success');
-      } else {
-        setForm(p => ({ ...p, supplier: suppliers[0]?.name || '' }));
-      }
+      setIsAddingNew(true);
+      setNewName('');
     } else {
       setForm(p => ({ ...p, supplier: val }));
     }
+  };
+
+  const confirmNewSupplier = async () => {
+    if (!newName.trim()) {
+      setIsAddingNew(false);
+      return;
+    }
+    const newSup = { name: newName.trim(), phone: '' };
+    if (window.api) {
+      const saved = await window.api.saveSupplier(newSup);
+      setSuppliers(prev => [...prev, saved]);
+    } else {
+      setSuppliers(prev => [...prev, { ...newSup, id: Date.now() }]);
+    }
+    setForm(p => ({ ...p, supplier: newSup.name }));
+    setIsAddingNew(false);
+    addToast(`Supplier ${newSup.name} added`, 'success');
   };
 
   const balance = Math.max(0, parseFloat(form.total || 0) - parseFloat(form.paid || 0));
@@ -56,8 +65,8 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Purchase Order' : 'Edit Purchase Order'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
@@ -68,10 +77,26 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
             <div><label className={labelCls}>Invoice #</label><input className={inputCls} value={form.invoice} onChange={e => setForm(p => ({...p, invoice: e.target.value}))} placeholder="b2c-3300 / 1240" /></div>
           </div>
           <div><label className={labelCls}>Supplier</label>
-            <select className={inputCls} value={form.supplier} onChange={handleSupplierChange}>
-              {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              <option value="###NEW###">— Add New Supplier —</option>
-            </select>
+            {isAddingNew ? (
+              <div className="flex gap-2">
+                <input 
+                  autoFocus
+                  className={inputCls} 
+                  placeholder="Enter supplier name..." 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && confirmNewSupplier()}
+                />
+                <button onClick={confirmNewSupplier} className="px-3 bg-green-600 text-white rounded-lg text-xs font-bold">Add</button>
+                <button onClick={() => setIsAddingNew(false)} className="px-3 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">X</button>
+              </div>
+            ) : (
+              <select className={inputCls} value={form.supplier} onChange={handleSupplierChange}>
+                <option value="" disabled>-- Select Supplier --</option>
+                <option value="###NEW###">— Add New Supplier —</option>
+                {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Total Amount (₹)</label><input type="number" className={inputCls} value={form.total} onChange={e => setForm(p => ({...p, total: e.target.value}))} /></div>
@@ -107,7 +132,7 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
 }
 
 export default function Purchases() {
-  const { darkMode, addToast, suppliers, setSuppliers, purchases, setPurchases, loadData } = useApp();
+  const { darkMode, addToast, suppliers, setSuppliers, purchases, setPurchases, isOwner } = useApp();
   const dm = darkMode;
   const [modal, setModal] = useState(null);
 
@@ -119,59 +144,39 @@ export default function Purchases() {
   const totalDue = purchases.reduce((s, p) => s + Math.max(0, (p.total || 0) - (p.paid || 0)), 0);
 
   const handleSave = async (purchase) => {
-    let saved = { ...purchase };
     if (window.api) {
-      const res = await window.api.savePurchase(purchase);
-      if (res && res.id) saved.id = res.id;
-      
-      // Update account balances (decrement)
-      if (purchase.paid > 0) {
-        const updates = {};
-        const method = (purchase.paymentMethod || 'Cash').toLowerCase();
-        if (method === 'cash') updates.cashBalance = -purchase.paid;
-        else updates.upiBalance = -purchase.paid;
-        await window.api.incrementSettings(updates);
-        await loadData();
-      }
+      await window.api.savePurchase(purchase);
     }
-    const exists = purchases.find(p => p.id === saved.id);
+    const exists = purchases.find(p => p.id === purchase.id);
     if (exists) {
-      setPurchases(prev => prev.map(p => p.id === saved.id ? saved : p));
-      addToast(`${saved.supplier} order updated`, 'success');
+      setPurchases(prev => prev.map(p => p.id === purchase.id ? purchase : p));
+      addToast(`${purchase.supplier} order updated`, 'success');
     } else {
-      setPurchases(prev => [saved, ...prev]);
-      addToast(`${saved.supplier} order added`, 'success');
+      setPurchases(prev => [purchase, ...prev]);
+      addToast(`${purchase.supplier} order added`, 'success');
     }
   };
 
-  const handleDelete = async (id, supplier, paid, method) => {
+  const handleDelete = async (id, supplier) => {
     if (window.api) {
       await window.api.deletePurchase(id);
-      
-      // Restore balance
-      if (paid > 0) {
-        const updates = {};
-        const pm = (method || 'Cash').toLowerCase();
-        if (pm === 'cash') updates.cashBalance = paid;
-        else updates.upiBalance = paid;
-        await window.api.incrementSettings(updates);
-        await loadData();
-      }
     }
     setPurchases(prev => prev.filter(p => p.id !== id));
     addToast(`${supplier} order removed`, 'warning');
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Purchases</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier invoices — click ✏️ to correct or update payment</p>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Purchases</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier invoices — click ✏️ to correct or update payment</p>
         </div>
-        <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
-          <Plus className="w-4 h-4" /> New Purchase
-        </button>
+        {!isOwner && (
+          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
+            <Plus className="w-4 h-4" /> New Purchase
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -197,7 +202,7 @@ export default function Purchases() {
               <th className={th}>Invoice</th><th className={th + ' text-right'}>Total</th>
               <th className={th + ' text-right'}>Paid</th><th className={th + ' text-right'}>Balance</th>
               <th className={th + ' text-center'}>Status</th>
-              <th className={th + ' text-center'}>Actions</th>
+              {!isOwner && <th className={th + ' text-center'}>Actions</th>}
             </tr></thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {purchases.map(p => (
@@ -218,16 +223,18 @@ export default function Purchases() {
                       'bg-red-100 text-red-700'
                     }`}>{p.status === 'paid' ? '✓ Paid' : p.status === 'partial' ? '⚡ Partial' : '⏳ Pending'}</span>
                   </td>
-                  <td className="px-5 py-3.5 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(p.id, p.supplier, p.paid, p.paymentMethod)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
+                  {!isOwner && (
+                    <td className="px-5 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(p.id, p.supplier)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

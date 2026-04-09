@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Filter, Download, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Edit2, Trash2, Plus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -11,60 +11,90 @@ export default function Accounting() {
   const dm = darkMode;
   const [activeTab, setActiveTab] = useState('ledger');
   const [filter, setFilter] = useState('All');
+  const [timeRange, setTimeRange] = useState('This Year');
+
+  // Time Filtering Helper
+  const isInRange = (dateStr) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const now = new Date();
+
+    if (timeRange === 'This Month') {
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    }
+    if (timeRange === 'Last Month') {
+      const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      return date.getMonth() === lastMonth && date.getFullYear() === year;
+    }
+    if (timeRange === 'This Year') {
+      return date.getFullYear() === now.getFullYear();
+    }
+    return true; // "All" or fallback
+  };
+
+  const filteredSales = (sales || []).filter(s => isInRange(s.created_at || s.date));
+  const filteredPurchases = (purchases || []).filter(p => isInRange(p.date));
+  const filteredExpenses = (expenses || []).filter(e => isInRange(e.date));
 
   // Compute Transactions
   const transactions = [
-    ...(sales || []).map(s => {
+    ...filteredSales.map(s => {
       const pm = (s.paymentMethod || s.payment_method || '').toLowerCase();
       const isCash = pm === 'cash';
       return {
-        id: `S-${s.id}`, 
-        date: (s.created_at || s.date || '').split(' ')[0], 
-        description: `Sale - INV-${s.id}`, 
-        account: isCash ? 'Cash' : 'Shop GPay / UPI', 
-        debit: null, 
-        credit: s.total || 0, 
+        id: `S-${s.id}`,
+        date: (s.created_at || s.date || '').split(' ')[0],
+        description: `Sale - INV-${s.id}`,
+        account: isCash ? 'Cash' : 'Shop GPay / UPI',
+        debit: null,
+        credit: s.total || 0,
         type: 'income'
       };
     }),
-    ...(expenses || []).map(e => {
+    ...filteredExpenses.map(e => {
       const pm = (e.paymentMethod || 'Cash').toLowerCase();
       return {
-        id: `E-${e.id}`, 
-        date: e.date || '', 
-        description: e.description || e.category || 'Expense', 
-        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI', 
-        debit: e.amount || 0, 
-        credit: null, 
+        id: `E-${e.id}`,
+        date: e.date || '',
+        description: e.description || e.category || 'Expense',
+        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI',
+        debit: e.amount || 0,
+        credit: null,
         type: 'expense'
       };
     }),
-    ...(purchases || []).map(p => {
+    ...filteredPurchases.map(p => {
       const pm = (p.paymentMethod || 'Cash').toLowerCase();
       return {
-        id: `P-${p.id}`, 
-        date: p.date || '', 
-        description: `Purchase - ${p.supplier || 'Unknown'} (${p.invoice || 'No Inv'})`, 
-        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI', 
-        debit: p.paid || 0, 
-        credit: null, 
+        id: `P-${p.id}`,
+        date: p.date || '',
+        description: `Purchase - ${p.supplier || 'Unknown'} (${p.invoice || 'No Inv'})`,
+        account: pm === 'cash' ? 'Cash' : 'Shop GPay / UPI',
+        debit: p.paid || 0,
+        credit: null,
         type: 'expense'
       };
     })
-  ].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  const handleExport = () => {
+    // Excel export removed per user request
+    alert('Export feature removed');
+  };
 
   // Ledger Summary
   const ledgerAccounts = [
     { name: 'Cash', type: 'Asset', balance: appSettings?.cashBalance || 0 },
     { name: 'Shop GPay / UPI', type: 'Asset', balance: appSettings?.upiBalance || 0 },
-    { name: 'Sales Revenue', type: 'Income', balance: (sales || []).reduce((a,b) => a + (b.total || 0), 0) },
-    { name: 'Purchase Account', type: 'Expense', balance: (purchases || []).reduce((a,b) => a + (b.paid || 0), 0) },
-    { name: 'General Expenses', type: 'Expense', balance: (expenses || []).reduce((a,b) => a + (b.amount || 0), 0) },
+    { name: 'Sales Revenue', type: 'Income', balance: filteredSales.reduce((a, b) => a + (b.total || 0), 0) },
+    { name: 'Purchase Account', type: 'Expense', balance: filteredPurchases.reduce((a, b) => a + (b.paid || 0), 0) },
+    { name: 'General Expenses', type: 'Expense', balance: filteredExpenses.reduce((a, b) => a + (b.amount || 0), 0) },
   ];
 
-  const totalSalesAmt = (sales || []).reduce((a,b) => a + (b.total || 0), 0);
-  const totalPurchasePaid = (purchases || []).reduce((a,b) => a + (b.paid || 0), 0);
-  const totalExpensesAmt = (expenses || []).reduce((a,b) => a + (b.amount || 0), 0);
+  const totalSalesAmt = filteredSales.reduce((a, b) => a + (b.total || 0), 0);
+  const totalPurchasePaid = filteredPurchases.reduce((a, b) => a + (b.paid || 0), 0);
+  const totalExpensesAmt = filteredExpenses.reduce((a, b) => a + (b.amount || 0), 0);
 
   const totalRevenue = totalSalesAmt;
   const totalExpAmt = totalPurchasePaid + totalExpensesAmt;
@@ -84,12 +114,15 @@ export default function Accounting() {
           <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Ledger, transactions, and financial reports</p>
         </div>
         <div className="flex gap-2">
-          <select className={`px-3 py-2 rounded-lg text-sm border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}>
-            <option>This Month</option><option>Last Month</option><option>This Year</option>
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className={`px-3 py-2 rounded-lg text-sm border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}
+          >
+            <option>This Month</option>
+            <option>Last Month</option>
+            <option>This Year</option>
           </select>
-          <button className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${dm ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-            <Download className="w-4 h-4" /> Export
-          </button>
         </div>
       </div>
 

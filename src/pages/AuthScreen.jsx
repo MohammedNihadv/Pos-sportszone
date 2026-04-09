@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Store, Shield, ChevronRight, Delete, Lock } from 'lucide-react';
 import { playSound } from '../utils/sounds';
 
-export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lockedUser = null }) {
-  const [selectedUser, setSelectedUser] = useState(lockedUser || (savedUsers.length > 0 ? savedUsers[0] : { role: 'Admin', name: 'Admin', pin: '1234' }));
+export default function AuthScreen({ onLogin, savedUsers = [], onLockMode = false, lockedUser = null }) {
+  const [selectedUser, setSelectedUser] = useState(lockedUser || ((savedUsers || []).length > 0 ? savedUsers[0] : { role: 'Admin', name: 'Admin', pin: '1234' }));
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const containerRef = useRef(null);
@@ -18,8 +18,10 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
       if (e.key >= '0' && e.key <= '9' && pin.length < 4) {
         e.preventDefault();
         playSound('tap');
-        setPin(prev => prev + e.key);
+        const next = pin + e.key;
+        setPin(next);
         setError(false);
+        checkPin(next);
       } else if (e.key === 'Backspace') {
         e.preventDefault();
         playSound('tap');
@@ -34,13 +36,31 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pin]);
+  }, [pin, selectedUser]);
+
+  const checkPin = (newPin) => {
+    if (newPin.length === 4) {
+      if (newPin === selectedUser.pin) {
+        playSound('success');
+        onLogin(selectedUser);
+      } else {
+        playSound('error');
+        setError(true);
+        setTimeout(() => {
+          setPin('');
+          setError(false);
+        }, 800);
+      }
+    }
+  };
 
   const handleKeyPress = (num) => {
-    playSound('tap');
     if (pin.length < 4) {
-      setPin(prev => prev + num);
+      playSound('tap');
+      const next = pin + num;
+      setPin(next);
       setError(false);
+      checkPin(next);
     }
   };
 
@@ -56,23 +76,12 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
     setError(false);
   };
 
-  // Auto-submit when 4 digits entered
-  useEffect(() => {
-    if (pin.length === 4) {
-      if (pin === selectedUser.pin) {
-        playSound('success');
-        onLogin(selectedUser);
-      } else {
-        playSound('error');
-        setError(true);
-        setTimeout(() => setPin(''), 500);
-      }
-    }
-  }, [pin, selectedUser, onLogin]);
+
 
   const switchUser = () => {
-    const currentIndex = savedUsers.findIndex(u => u.role === selectedUser.role);
-    const nextIndex = (currentIndex + 1) % savedUsers.length;
+    const currentIndex = (savedUsers || []).findIndex(u => u.role === selectedUser.role);
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + 1) % (savedUsers || []).length;
     setSelectedUser(savedUsers[nextIndex]);
     setPin('');
     playSound('switch');
@@ -101,7 +110,7 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
         {/* Card */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
           {/* User Selector */}
-          {!onLockMode && savedUsers.length > 1 && (
+          {!onLockMode && (savedUsers || []).length > 1 && (
             <button
               onClick={switchUser}
               className="w-full flex items-center justify-between p-3 mb-5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
@@ -132,7 +141,7 @@ export default function AuthScreen({ onLogin, savedUsers, onLockMode = false, lo
             </div>
           )}
 
-          {!onLockMode && savedUsers.length <= 1 && (
+          {!onLockMode && (savedUsers || []).length <= 1 && (
             <div className="flex flex-col items-center mb-5">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold shadow-sm mb-2
                 ${selectedUser.role === 'Admin' || selectedUser.role === 'Owner' ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>

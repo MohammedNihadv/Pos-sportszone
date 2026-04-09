@@ -1,0 +1,732 @@
+﻿
+> pos-system@4.0.2 lint
+> eslint .
+
+
+C:\Users\mhdni\Desktop\Pos-system\Pos-developer-dashboard\src\App.jsx
+  16:10  error  'loading' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   no-unused-vars
+  26:10  error  'selectedError' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             no-unused-vars
+  26:25  error  'setSelectedError' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          no-unused-vars
+  30:7   error  Error: Cannot access variable before it is declared
+
+`fetchTelemetry` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  28 |   useEffect(() => {
+  29 |     if (isAuthenticated) {
+> 30 |       fetchTelemetry();
+     |       ^^^^^^^^^^^^^^ `fetchTelemetry` accessed before it is declared
+  31 |       const devicesSub = supabase.channel('custom-all-channel')
+  32 |         .on('postgres_changes', { event: '*', schema: 'public', table: 'device_telemetry' }, payload => {
+  33 |           fetchTelemetry();
+
+  55 |   };
+  56 |
+> 57 |   const fetchTelemetry = async (target = 'all') => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 58 |     // Only show loading on initial full load to prevent "jitters" during background sync
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 59 |     if (target === 'all') setLoading(true);
+     ΓÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 88 |     if (target === 'all') setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 89 |   };
+     | ^^^^^ `fetchTelemetry` is declared here
+  90 |
+  91 |   const triggerForceAction = async (deviceId, action) => {
+  92 |     if (!window.confirm(`CRITICAL: Are you sure you want to trigger '${action.toUpperCase()}' on device ${deviceId}?`)) return;  react-hooks/immutability
+  32:94  error  'payload' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\electron\backup.js
+   10:23   error  'process' is not defined       no-undef
+   24:17   error  'process' is not defined       no-undef
+   67:54   error  'e' is defined but never used  no-unused-vars
+   67:57   error  Empty block statement          no-empty
+  141:79   error  'e' is defined but never used  no-unused-vars
+  141:81   error  Empty block statement          no-empty
+  222:99   error  'e' is defined but never used  no-unused-vars
+  222:101  error  Empty block statement          no-empty
+  224:11   error  Empty block statement          no-empty
+
+C:\Users\mhdni\Desktop\Pos-system\electron\cloudSync.js
+  199:12  error  'e' is defined but never used  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\electron\db.js
+   12:17  error  'process' is not defined       no-undef
+   48:12  error  'e' is defined but never used  no-unused-vars
+   66:94  error  'e' is defined but never used  no-unused-vars
+   66:96  error  Empty block statement          no-empty
+   67:96  error  'e' is defined but never used  no-unused-vars
+   67:98  error  Empty block statement          no-empty
+   68:90  error  'e' is defined but never used  no-unused-vars
+   68:92  error  Empty block statement          no-empty
+   69:93  error  'e' is defined but never used  no-unused-vars
+   69:95  error  Empty block statement          no-empty
+  269:14  error  'e' is defined but never used  no-unused-vars
+  302:98  error  Empty block statement          no-empty
+  309:19  error  Empty block statement          no-empty
+  311:15  error  Empty block statement          no-empty
+  317:94  error  Empty block statement          no-empty
+  318:94  error  Empty block statement          no-empty
+  319:59  error  Empty block statement          no-empty
+  336:29  error  Empty block statement          no-empty
+  348:13  error  Empty block statement          no-empty
+  358:58  error  Empty block statement          no-empty
+
+C:\Users\mhdni\Desktop\Pos-system\electron\logger.js
+   8:17  error  'process' is not defined  no-undef
+  38:65  error  Empty block statement     no-empty
+  64:11  error  Empty block statement     no-empty
+
+C:\Users\mhdni\Desktop\Pos-system\electron\main.js
+   27:1   error  'process' is not defined       no-undef
+   31:1   error  'process' is not defined       no-undef
+  126:7   error  'process' is not defined       no-undef
+  156:17  error  'process' is not defined       no-undef
+  159:52  error  Empty block statement          no-empty
+  168:22  error  'process' is not defined       no-undef
+  169:18  error  'process' is not defined       no-undef
+  170:15  error  'process' is not defined       no-undef
+  173:24  error  'process' is not defined       no-undef
+  427:82  error  'e' is defined but never used  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\electron\receipt.js
+  57:9  error  'width' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\electron\telemetry.js
+  18:7  error  'getDeviceInfo' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\electron\updater.js
+  86:45  error  'mainWindow' is defined but never used  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\App.jsx
+   37:28  error  'errorInfo' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               no-unused-vars
+  138:7   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  136 |   useEffect(() => {
+  137 |     if (!isAdminUnlocked) {
+> 138 |       setPin('');
+      |       ^^^^^^ Avoid calling setState() directly within an effect
+  139 |       setShowPin(false);
+  140 |       setError(false);
+  141 |     }  react-hooks/set-state-in-effect
+  159:13  error  'err' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     no-unused-vars
+  264:11  error  'isReady' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             no-unused-vars
+  264:30  error  'dm' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  no-unused-vars
+  264:34  error  'toasts' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+  264:42  error  'dismissToast' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        no-unused-vars
+  264:59  error  React Hook "useApp" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/rules-of-hooks
+
+C:\Users\mhdni\Desktop\Pos-system\src\components\CheckoutModal.jsx
+  204:6   warning  React Hook useEffect has missing dependencies: 'confirmAmount' and 'selectMethod'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  370:58  error    'Icon' is defined but never used                                                                                                       no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\components\ReceiptDownload.jsx
+  44:28  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  42 |   const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  43 |   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+> 44 |   const invoiceNo = `INV-${Date.now().toString().slice(-6)}`;
+     |                            ^^^^^^^^^^ Cannot call impure function
+  45 |
+  46 |   return (
+  47 |     <div>  react-hooks/purity
+
+C:\Users\mhdni\Desktop\Pos-system\src\components\UpdateNotifier.jsx
+  23:36  error  'data' is defined but never used  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\context\AppContext.jsx
+  141:9   error    Error: Cannot access variable before it is declared
+
+`setUsers` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  139 |         setCategories(cats || []); setExpenseCategories(expCats || []);
+  140 |         setSales(sl || []); setExpenses(ex || []); setPurchases(pu || []);
+> 141 |         setUsers(dbUsers || []); setCustomersState(dbCust || []); setCreditsState(dbCredits || []);
+      |         ^^^^^^^^ `setUsers` accessed before it is declared
+  142 |         
+  143 |         try {
+  144 |           const ls = await api.getLastSyncTime();
+
+  233 |   });
+  234 |   
+> 235 |   const [users, setUsers] = useState([]);
+      |                 ^^^^^^^^ `setUsers` is declared here
+  236 |   const [currentUser, setCurrentUserState] = useState(() => {
+  237 |     try { return JSON.parse(localStorage.getItem('sz_current_user')) || null; }
+  238 |     catch { return null; }  react-hooks/immutability
+  146:17  error    Empty block statement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                no-empty
+  227:20  error    'setAdminPinState' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     no-unused-vars
+  319:7   warning  React Hook useMemo has a missing dependency: 'setCustomers'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        react-hooks/exhaustive-deps
+  338:17  error    Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-refresh/only-export-components
+
+C:\Users\mhdni\Desktop\Pos-system\src\context\AuthContext.jsx
+  43:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\mhdni\Desktop\Pos-system\src\context\CartContext.jsx
+   22:7   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  20 |     const recoveredCart = recoverSession();
+  21 |     if (recoveredCart && recoveredCart.length > 0) {
+> 22 |       setCart(recoveredCart);
+     |       ^^^^^^^ Avoid calling setState() directly within an effect
+  23 |       addToast(`Recovered ${recoveredCart.length} item(s) from previous session`, 'success');
+  24 |     }
+  25 |     setRecoveryOffered(true);  react-hooks/set-state-in-effect
+  108:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-refresh/only-export-components
+
+C:\Users\mhdni\Desktop\Pos-system\src\hooks\useAutoLock.js
+  59:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  57 |     if (isLocked || !autoLockEnabled || !currentUser || currentUser.role !== 'Cashier') {
+  58 |       clearAllTimers();
+> 59 |       setIsWarning(false);
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  60 |       return;
+  61 |     }
+  62 |  react-hooks/set-state-in-effect
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Accounting.jsx
+  81:9  error  'handleExport' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\ActivityLogs.jsx
+  11:5  error  Error: Cannot access variable before it is declared
+
+`fetchLogs` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+   9 |
+  10 |   useEffect(() => {
+> 11 |     fetchLogs();
+     |     ^^^^^^^^^ `fetchLogs` accessed before it is declared
+  12 |   }, []);
+  13 |
+  14 |   const fetchLogs = async () => {
+
+  12 |   }, []);
+  13 |
+> 14 |   const fetchLogs = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 15 |     if (window.api && window.api.getAuditLogs) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 16 |       try {
+     ΓÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     setIsLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   };
+     | ^^^^^ `fetchLogs` is declared here
+  25 |
+  26 |   const getIconForAction = (action) => {
+  27 |     if (action.includes('Delete')) return <Trash2 className="w-4 h-4 text-red-500" />;  react-hooks/immutability
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\AuthScreen.jsx
+  12:21  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  10 |
+  11 |   useEffect(() => {
+> 12 |     if (lockedUser) setSelectedUser(lockedUser);
+     |                     ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  13 |   }, [lockedUser]);
+  14 |
+  15 |   // ΓöÇΓöÇΓöÇ Physical Keyboard Support ΓöÇΓöÇΓöÇ  react-hooks/set-state-in-effect
+  67:9   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  65 |       } else {
+  66 |         playSound('error');
+> 67 |         setError(true);
+     |         ^^^^^^^^ Avoid calling setState() directly within an effect
+  68 |         setTimeout(() => setPin(''), 500);
+  69 |       }
+  70 |     }                         react-hooks/set-state-in-effect
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Credits.jsx
+  17:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  15 |     try {
+  16 |       const stored = JSON.parse(localStorage.getItem('sz_credits') || '[]');
+> 17 |       setCredits(stored);
+     |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  18 |     } catch { setCredits([]); }
+  19 |   }, []);
+  20 |  react-hooks/set-state-in-effect
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Customers.jsx
+  55:13  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  53 |     } else {
+  54 |       const newCustomer = {
+> 55 |         id: Date.now(),
+     |             ^^^^^^^^^^ Cannot call impure function
+  56 |         ...formData,
+  57 |         orders: 0,
+  58 |         total: 0,  react-hooks/purity
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Dashboard.jsx
+  423:5  error  Parsing error: Adjacent JSX elements must be wrapped in an enclosing tag
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Expenses.jsx
+    1:29  error  'useEffect' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             no-unused-vars
+  113:30  error  Error: Cannot reassign variable after render completes
+
+Reassigning `running` after render has completed can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+  111 |     const sorted = [...filtered].sort((a, b) => new Date(a.date) - new Date(b.date));
+  112 |     let running = 0;
+> 113 |     return sorted.map(e => { running += e.amount; return { ...e, running }; }).reverse();
+      |                              ^^^^^^^ Cannot reassign `running` after render completes
+  114 |   }, [filtered]);
+  115 |
+  116 |   const handleSave = async (entry) => {  react-hooks/immutability
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\POSBilling.jsx
+    6:10  error    'motion' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      no-unused-vars
+  169:39  error    'discount' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           no-unused-vars
+  169:49  error    'setDiscount' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        no-unused-vars
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `refreshSales`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {      react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `refreshProducts`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {   react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `refreshCredits`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {    react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `loadData`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {          react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `refreshCustomers`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {  react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `appSettings`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {       react-hooks/preserve-manual-memoization
+  198:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `saveAppSettings`, but the source dependencies were [grandTotal, discountAmount, cart, addToast, setProducts, setSales]. Inferred different dependency than source.
+
+  196 |   };
+  197 |
+> 198 |   const completeSale = useCallback(async (paymentData) => {
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> 199 |     const saleData = {
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 200 |       total: grandTotal,
+      ΓÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 287 |     // The user can click "Receipt" or "WhatsApp" there manually.
+      | ^^^^^^^^^^^^^^^^^^^^^^
+> 288 |   }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+      | ^^^^ Could not preserve existing manual memoization
+  289 |
+  290 |   // Keyboard shortcuts
+  291 |   useEffect(() => {   react-hooks/preserve-manual-memoization
+  288:6   warning  React Hook useCallback has missing dependencies: 'appSettings', 'loadData', 'refreshCredits', 'refreshCustomers', 'refreshProducts', 'refreshSales', and 'saveAppSettings'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\PurchaseLedger.jsx
+  127:7  error  Error: Cannot reassign variable after render completes
+
+Reassigning `running` after render has completed can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+  125 |     let running = openingBalance;
+  126 |     return sorted.map(e => {
+> 127 |       running += (e.debit || 0) - (e.credit || 0);
+      |       ^^^^^^^ Cannot reassign `running` after render completes
+  128 |       return { ...e, running };
+  129 |     });
+  130 |   }, [filtered, openingBalance]);  react-hooks/immutability
+  175:9  error  'th' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Purchases.jsx
+  1:20  error  'useEffect' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Reports.jsx
+    1:10  error  'useState' is defined but never used. Allowed unused vars must match /^[A-Z_]/u          no-unused-vars
+  110:24  error  'banking' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\Settings.jsx
+    8:15  error    'setDarkMode' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       no-unused-vars
+    9:5   error    'updateAdminPin' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    no-unused-vars
+   11:5   error    'currentUser' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       no-unused-vars
+   38:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  36 |   useEffect(() => {
+  37 |     if (appSettings && Object.keys(appSettings).length > 0 && (!localSettings || Object.keys(localSettings).length === 0)) {
+> 38 |       setLocalSettings({ ...appSettings });
+     |       ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  39 |     }
+  40 |   }, [appSettings]);
+  41 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/set-state-in-effect
+   40:6   warning  React Hook useEffect has a missing dependency: 'localSettings'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  257:48  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  255 |               <div className="w-8 h-8 rounded-lg bg-emerald-600/10 flex items-center justify-center text-emerald-600 text-sm font-bold">Γé╣</div>
+  256 |               Tax Details
+> 257 |               {isOwner && !isAdminUnlocked && <MasterLock />}
+      |                                                ^^^^^^^^^^ This component is created during render
+  258 |             </h3>
+  259 |             <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+  260 |               {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |                             react-hooks/static-components
+  279:48  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  277 |               </div>
+  278 |               Account Balances
+> 279 |               {isOwner && !isAdminUnlocked && <MasterLock />}
+      |                                                ^^^^^^^^^^ This component is created during render
+  280 |             </h3>
+  281 |             <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+  282 |               {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |                                                                                                                                                   react-hooks/static-components
+  306:48  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  304 |             <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+  305 |               <Shield className="w-4 h-4 text-orange-500" /> Security & Access
+> 306 |               {isOwner && !isAdminUnlocked && <MasterLock />}
+      |                                                ^^^^^^^^^^ This component is created during render
+  307 |             </h3>
+  308 |             <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+  309 |               {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |  react-hooks/static-components
+  349:48  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  347 |             <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+  348 |               <Printer className="w-4 h-4 text-blue-600" /> Receipt & Printing
+> 349 |               {isOwner && !isAdminUnlocked && <MasterLock />}
+      |                                                ^^^^^^^^^^ This component is created during render
+  350 |             </h3>
+  351 |             <div className={`relative ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+  352 |               {isOwner && !isAdminUnlocked && <div className="glass-overlay rounded-xl" />}
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |  react-hooks/static-components
+  398:48  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  396 |             <h3 className={`font-bold mb-4 flex items-center gap-3 text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>
+  397 |               <RefreshCw className="w-4 h-4 text-sky-500" /> Cloud Sync
+> 398 |               {isOwner && !isAdminUnlocked && <MasterLock />}
+      |                                                ^^^^^^^^^^ This component is created during render
+  399 |             </h3>
+  400 |             <div className={`flex items-center justify-between ${isOwner && !isAdminUnlocked ? 'restricted-blur' : ''}`}>
+  401 |               <div>
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |                                                        react-hooks/static-components
+  527:20  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  525 |               {isOwner && !isAdminUnlocked && (
+  526 |                 <div className="absolute top-4 right-4 group-hover:scale-110 transition-transform">
+> 527 |                   <MasterLock />
+      |                    ^^^^^^^^^^ This component is created during render
+  528 |                 </div>
+  529 |               )}
+  530 |
+
+  17 |   } = ctx;
+  18 |
+> 19 |   const MasterLock = () => (
+     |                      ^^^^^^^
+> 20 |     <div className="group relative ml-auto flex items-center justify-center pointer-events-auto" title="Master Admin Access Required">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       <div className="absolute inset-0 bg-red-500/0 group-hover:bg-red-500/20 rounded-full blur-md transition-all duration-300"></div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |       <Lock className="w-4 h-4 text-red-500/40 group-hover:text-red-500 lock-glow cursor-help relative z-10" />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |     </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |   );
+     | ^^^^ The component is created during render here
+  25 |
+  26 |   const [localSettings, setLocalSettings] = useState(appSettings);
+  27 |                                                                                                                                                                                                                                                                                   react-hooks/static-components
+
+C:\Users\mhdni\Desktop\Pos-system\src\pages\SystemHealth.jsx
+   22:5   error  Error: Cannot access variable before it is declared
+
+`loadData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  20 |
+  21 |   useEffect(() => {
+> 22 |     loadData();
+     |     ^^^^^^^^ `loadData` accessed before it is declared
+  23 |     const handleOnline = () => setIsOnline(true);
+  24 |     const handleOffline = () => setIsOnline(false);
+  25 |     window.addEventListener('online', handleOnline);
+
+  31 |   }, []);
+  32 |
+> 33 |   async function loadData() {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |     setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 35 |     try {
+     ΓÇª
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 66 |     setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^
+> 67 |   }
+     | ^^^^ `loadData` is declared here
+  68 |
+  69 |   async function handleBackup() {
+  70 |     setBackingUp(true);  react-hooks/immutability
+   53:17  error  Empty block statement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-empty
+   65:13  error  Empty block statement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-empty
+   82:14  error  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+   95:13  error  Empty block statement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-empty
+  108:14  error  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+  126:14  error  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+  237:30  error  'i' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+
+C:\Users\mhdni\Desktop\Pos-system\src\utils\sessionRecovery.js
+  18:13  error  Empty block statement  no-empty
+  43:11  error  Empty block statement  no-empty
+  49:11  error  Empty block statement  no-empty
+  55:11  error  Empty block statement  no-empty
+
+C:\Users\mhdni\Desktop\Pos-system\verify_functional_SZ.js
+   3:8  error  'fs' is defined but never used. Allowed unused vars must match /^[A-Z_]/u    no-unused-vars
+   4:8  error  'path' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+  21:5  error  'process' is not defined                                                     no-undef
+
+Γ£û 123 problems (119 errors, 4 warnings)
+

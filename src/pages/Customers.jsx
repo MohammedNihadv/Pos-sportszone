@@ -11,7 +11,7 @@ export default function Customers() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', orders: 0, total: 0, lastOrder: '-' });
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
@@ -25,10 +25,17 @@ export default function Customers() {
     playSound('tap');
     if (customer) {
       setEditingCustomer(customer);
-      setFormData({ name: customer.name, phone: customer.phone, email: customer.email });
+      setFormData({ 
+        name: customer.name, 
+        phone: customer.phone, 
+        email: customer.email,
+        orders: customer.orders || 0,
+        total: customer.total || 0,
+        lastOrder: customer.lastOrder || '-'
+      });
     } else {
       setEditingCustomer(null);
-      setFormData({ name: '', phone: '', email: '' });
+      setFormData({ name: '', phone: '', email: '', orders: 0, total: 0, lastOrder: '-' });
     }
     setIsModalOpen(true);
   };
@@ -73,11 +80,11 @@ export default function Customers() {
   };
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Customers</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Customer database and purchase history</p>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Customers</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Customer database and purchase history</p>
         </div>
         {!isOwner && (
           <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">
@@ -164,8 +171,8 @@ export default function Customers() {
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className={`w-full max-w-md rounded-3xl shadow-2xl ${dm ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onMouseDown={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-md rounded-3xl shadow-2xl ${dm ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
             <div className={`flex items-center justify-between p-6 border-b ${dm ? 'border-slate-800' : 'border-slate-100'}`}>
               <h3 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>
                 {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
@@ -205,6 +212,37 @@ export default function Customers() {
                   className={inputCls} 
                   value={formData.email} 
                   onChange={e => setFormData({...formData, email: e.target.value})} 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Orders</label>
+                  <input 
+                    type="number"
+                    className={inputCls} 
+                    value={formData.orders} 
+                    onChange={e => setFormData({...formData, orders: parseInt(e.target.value) || 0})} 
+                  />
+                </div>
+                <div>
+                  <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Spent (₹)</label>
+                  <input 
+                    type="number"
+                    className={inputCls} 
+                    value={formData.total} 
+                    onChange={e => setFormData({...formData, total: parseFloat(e.target.value) || 0})} 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Last Order Date</label>
+                <input 
+                  placeholder="e.g. 15 Oct 2023"
+                  className={inputCls} 
+                  value={formData.lastOrder} 
+                  onChange={e => setFormData({...formData, lastOrder: e.target.value})} 
                 />
               </div>
 

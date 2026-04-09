@@ -1,35 +1,41 @@
-import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Search, Edit2, Trash2, X, AlertTriangle, RefreshCw, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
-// --- Products are now managed via SQLite ---
-
-
-function ProductModal({ product, onClose, onSave, dm, categories, setCategories, addToast, showFinancials }) {
-  const [form, setForm] = useState(product || { name: '', sku: '', category: categories[0]?.name || 'Jerseys', stock: '', cost: '', price: '', emoji: '👕' });
+function ProductModal({ product, onClose, onSave, dm, categories, setCategories, addToast, showFinancials, PRODUCT_ICONS }) {
+  const [form, setForm] = useState(product || { name: '', sku: '', category: categories[0]?.name || 'Jerseys', stock: '', cost: '', price: '', emoji: '📦' });
   const isNew = !product;
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+
+
 
   const handleCategoryChange = async (e) => {
     const val = e.target.value;
     if (val === '###NEW###') {
-      const newName = window.prompt('Enter new category name:');
-      if (newName?.trim()) {
-        const newCat = { name: newName.trim() };
-        if (window.api) {
-          const saved = await window.api.saveCategory(newCat);
-          setCategories(prev => [...prev, saved]);
-        } else {
-          setCategories(prev => [...prev, { ...newCat, id: Date.now() }]);
-        }
-        setForm(p => ({ ...p, category: newCat.name }));
-        addToast(`Category ${newCat.name} added`, 'success');
-      } else {
-        setForm(p => ({ ...p, category: categories[0]?.name || 'Jerseys' }));
-      }
+      setIsAddingNew(true);
+      setNewName('');
     } else {
       setForm(p => ({ ...p, category: val }));
     }
+  };
+
+  const confirmNewCategory = async () => {
+    if (!newName.trim()) {
+      setIsAddingNew(false);
+      return;
+    }
+    const newCat = { name: newName.trim() };
+    if (window.api) {
+      const saved = await window.api.saveCategory(newCat);
+      setCategories(prev => [...prev, saved]);
+    } else {
+      setCategories(prev => [...prev, { ...newCat, id: Date.now() }]);
+    }
+    setForm(p => ({ ...p, category: newCat.name }));
+    setIsAddingNew(false);
+    addToast(`Category ${newCat.name} added`, 'success');
   };
 
   const handleSave = () => {
@@ -37,8 +43,8 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
     if (!form.sku) return addToast('Please enter product SKU', 'error');
     if (!form.price) return addToast('Please enter selling price', 'error');
 
-    onSave({ 
-      ...form, 
+    onSave({
+      ...form,
       emoji: form.emoji || '📦',
       stock: parseInt(form.stock || 0),
       cost: parseFloat(form.cost || 0),
@@ -51,40 +57,58 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <h3 className={`font-bold text-base ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add New Product' : 'Edit Product'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 grid grid-cols-2 gap-3">
-          <div className="col-span-2"><label className={labelCls}>Product Name *</label><input className={inputCls} value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} placeholder="e.g., Jersey 5 Collar" /></div>
-          <div><label className={labelCls}>SKU *</label><input className={inputCls} value={form.sku} onChange={e => setForm(p => ({...p, sku: e.target.value}))} placeholder="JR001" /></div>
+          <div className="col-span-2"><label className={labelCls}>Product Name *</label><input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Jersey 5 Collar" /></div>
+          <div><label className={labelCls}>SKU *</label><input className={inputCls} value={form.sku} onChange={e => setForm(p => ({ ...p, sku: e.target.value }))} placeholder="JR001" /></div>
           <div><label className={labelCls}>Category</label>
-            <select className={inputCls} value={form.category} onChange={handleCategoryChange}>
-              {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-              <option value="###NEW###">— Add New Category —</option>
-            </select>
+            {isAddingNew ? (
+              <div className="flex gap-2">
+                <input 
+                  autoFocus
+                  className={inputCls} 
+                  placeholder="Enter category name..." 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && confirmNewCategory()}
+                />
+                <button onClick={confirmNewCategory} className="px-3 bg-green-600 text-white rounded-xl text-xs font-bold shadow-sm">Add</button>
+                <button onClick={() => setIsAddingNew(false)} className="px-3 bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">X</button>
+              </div>
+            ) : (
+              <select className={inputCls} value={form.category} onChange={handleCategoryChange}>
+                <option value="" disabled>-- Select Category --</option>
+                <option value="###NEW###">— Add New Category —</option>
+                {(categories || []).map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            )}
           </div>
-          <div><label className={labelCls}>Stock Qty</label><input type="number" className={inputCls} value={form.stock} onChange={e => setForm(p => ({...p, stock: e.target.value}))} placeholder="0" /></div>
-          {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} placeholder="0" /></div>}
-          <div><label className={labelCls}>Selling Price (₹) *</label><input type="number" className={inputCls} value={form.price} onChange={e => setForm(p => ({...p, price: e.target.value}))} placeholder="0" /></div>
-          
-          <div className="col-span-2 mt-2">
+          <div><label className={labelCls}>Stock Qty</label><input type="number" className={inputCls} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} placeholder="0" /></div>
+          {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} placeholder="0" /></div>}
+          <div><label className={labelCls}>Selling Price (₹) *</label><input type="number" className={inputCls} value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="0" /></div>
+          <div className="col-span-2">
             <label className={labelCls}>Product Icon</label>
-            <div className="flex flex-wrap gap-2">
-              {['👕','👟','🩳','🧢','🏐','⚽','🏀','🏏','🎾','🏅','🎒','⌚','🛡️','🏋️'].map(em => (
+            <div className={`flex flex-wrap gap-2 p-3 rounded-xl border max-h-[120px] overflow-y-auto ${dm ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+              {(PRODUCT_ICONS || []).map(icon => (
                 <button
-                  key={em}
-                  onClick={() => setForm(p => ({ ...p, emoji: em }))}
-                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border transition-all hover:scale-105
-                    ${form.emoji === em ? 'bg-blue-50 border-blue-500 shadow-sm scale-110' : (dm ? 'bg-slate-800 border-slate-600' : 'bg-slate-50 border-slate-200 hover:bg-slate-100')}`}
+                  key={icon}
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, emoji: icon }))}
+                  className={`w-10 h-10 flex items-center justify-center text-xl rounded-lg transition-all ${form.emoji === icon ? 'bg-blue-600 shadow-lg scale-110 text-white' : (dm ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-white shadow-sm border border-transparent hover:border-slate-200 text-slate-600')}`}
                 >
-                  {em}
+                  {icon}
                 </button>
               ))}
             </div>
           </div>
+
+
+
         </div>
         <div className={`flex gap-3 px-5 pb-5`}>
           <button onClick={onClose} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${dm ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
@@ -97,16 +121,18 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
   );
 }
 
+
+
 export default function Inventory() {
-  const { darkMode, addToast, products, setProducts, categories, setCategories, isOwner, isAdminUnlocked, refreshProducts } = useApp();
+  const { darkMode, addToast, products, setProducts, categories, setCategories, isOwner, isAdminUnlocked, refreshProducts, PRODUCT_ICONS } = useApp();
   const dm = darkMode;
-  const showFinancials = isOwner || isAdminUnlocked;
+  const showFinancials = isAdminUnlocked || isOwner;
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
 
   const filtered = products.filter(p =>
     (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (p.sku || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.sku || '').toLowerCase().trim().includes(search.toLowerCase().trim()) ||
     (p.category || '').toLowerCase().includes(search.toLowerCase())
   );
 
@@ -122,7 +148,6 @@ export default function Inventory() {
         addToast(`${product.name} added to inventory`, 'success');
       }
     } else {
-      // Browser-only fallback
       if (product.id) {
         setProducts(prev => prev.map(p => p.id === product.id ? product : p));
         addToast(`${product.name} updated`, 'success');
@@ -145,38 +170,44 @@ export default function Inventory() {
   const totalValue = products.reduce((s, p) => s + (p.stock * p.cost), 0);
   const lowStockCount = products.filter(p => p.stock < 5).length;
 
+
+
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-4 py-3 text-left font-medium text-xs uppercase tracking-wide ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
-      {/* Title row */}
       <div className="flex justify-between items-end">
         <div>
           <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Inventory</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sports Zone — {products.length} products across 7 categories</p>
+          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Sports Zone — {products.length} products across {categories.length} categories</p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={async () => {
-              playSound('click');
-              await refreshProducts();
-              addToast('Inventory Refreshed', 'success');
-            }}
-            className={`p-2.5 rounded-xl border transition-colors ${dm ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-            title="Force Sync"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          {!isOwner && showFinancials && (
-            <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md">
+
+          {!isOwner && (
+            <button
+              onClick={async () => {
+                playSound('click');
+                await refreshProducts();
+                addToast('Inventory Refreshed', 'success');
+              }}
+              className={`p-2.5 rounded-xl border transition-colors ${dm ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+              title="Force Sync"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
+          {isAdminUnlocked && (
+            <button
+              onClick={() => setModal('new')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md bg-blue-600 text-white hover:bg-blue-700"
+            >
               <Plus className="w-4 h-4" /> Add Product
             </button>
           )}
         </div>
       </div>
 
-      {/* KPI Row */}
       <div className="grid grid-cols-3 gap-4">
         <div className={`${card} p-4`}>
           <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Total Products</p>
@@ -194,7 +225,6 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Table */}
       <div className={`${card} overflow-hidden`}>
         <div className={`px-5 py-3.5 border-b flex items-center gap-3 ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <Search className="w-4 h-4 text-slate-400" />
@@ -217,15 +247,15 @@ export default function Inventory() {
                 <th className={th + ' text-right'}>Price</th>
                 <th className={th + ' text-right'}>Margin</th>
                 <th className={th + ' text-right'}>Value</th>
-                {!isOwner && showFinancials && <th className={th + ' text-center'}>Actions</th>}
+                {isAdminUnlocked && <th className={th + ' text-center'}>Actions</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
-              {filtered.map(p => {
+              {(filtered || []).map(p => {
                 const margin = p.cost > 0 ? (((p.price - p.cost) / p.cost) * 100).toFixed(0) : 0;
                 return (
                   <tr key={p.id} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
-                    <td className={`px-4 py-3.5 font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>{p.name}</td>
+                    <td className={`px-4 py-3.5 font-semibold ${dm ? 'text-white' : 'text-slate-800'}`}>{p.emoji} {p.name}</td>
                     <td className="px-4 py-3.5">
                       <p className={`font-mono text-xs ${dm ? 'text-slate-300' : 'text-slate-700'}`}>{p.sku}</p>
                     </td>
@@ -245,11 +275,29 @@ export default function Inventory() {
                       <span className="text-xs font-bold text-green-600">{showFinancials ? `${margin}%` : '***'}</span>
                     </td>
                     <td className="px-4 py-3.5 text-right font-semibold text-blue-600">{showFinancials ? `₹${(p.stock * p.cost).toLocaleString()}` : '***'}</td>
-                    {!isOwner && showFinancials && (
+                    {isAdminUnlocked && (
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => setModal(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDelete(p.id, p.name)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <button
+                            onClick={() => {
+                              if (!isAdminUnlocked) return addToast('Master Admin access required to edit', 'error');
+                              setModal(p);
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors relative group ${isAdminUnlocked ? 'text-blue-500 hover:bg-blue-50' : 'text-slate-300'}`}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            {!isAdminUnlocked && <Lock className="w-2.5 h-2.5 absolute -top-1 -right-1 text-red-500/60 group-hover:text-red-500 transition-colors" />}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!isAdminUnlocked) return addToast('Master Admin access required to delete', 'error');
+                              handleDelete(p.id, p.name);
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors relative group ${isAdminUnlocked ? 'text-red-500 hover:bg-red-50' : 'text-slate-300'}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            {!isAdminUnlocked && <Lock className="w-2.5 h-2.5 absolute -top-1 -right-1 text-red-500/60 group-hover:text-red-500 transition-colors" />}
+                          </button>
                         </div>
                       </td>
                     )}
@@ -277,6 +325,7 @@ export default function Inventory() {
           setCategories={setCategories}
           addToast={addToast}
           showFinancials={showFinancials}
+          PRODUCT_ICONS={PRODUCT_ICONS}
         />
       )}
     </div>

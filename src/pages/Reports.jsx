@@ -157,7 +157,7 @@ export default function Reports() {
             <h3 className={`font-bold text-lg ${dm ? 'text-white' : 'text-slate-800'}`}>Sales & Profit Trend</h3>
             <p className={`text-xs mt-1 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Monthly comparison over the last 6 months</p>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={300} minWidth={1} minHeight={1}>
             <AreaChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
               <defs>
                 <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">

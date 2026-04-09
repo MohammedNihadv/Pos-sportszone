@@ -205,7 +205,8 @@ function ProtectedRoute({ children }) {
 }
 
 function AppContent() {
-  const { currentUser, setCurrentUser, isLocked, setIsLocked, users } = useApp();
+  const appData = useApp();
+  const { currentUser, setCurrentUser, isLocked, setIsLocked, users, isReady, darkMode: dm, toasts, dismissToast } = appData || {};
 
   // Set crash flag on mount, clear on clean unmount
   useEffect(() => {
@@ -261,7 +262,6 @@ function AppContent() {
     );
   }
 
-  const { isReady, darkMode: dm, toasts, dismissToast } = useApp();
 
   return (
     <Router>

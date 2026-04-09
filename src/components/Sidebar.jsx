@@ -51,23 +51,36 @@ const NAV_SECTIONS = [
   },
 ];
 
-const SyncBadge = ({ status, collapsed, dm }) => {
+const SyncBadge = ({ status, collapsed, dm, lastSync }) => {
   const config = {
     synced:  { icon: <Wifi className="w-3.5 h-3.5" />,                            label: 'SYNCED',      cls: dm ? 'text-emerald-400 bg-emerald-900/30' : 'text-[#007f5f] bg-[#e6fceb]' },
-    syncing: { icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />,          label: 'SYNCING...',  cls: dm ? 'text-amber-400 bg-amber-900/30' : 'text-amber-700 bg-amber-100' },
+    syncing: { icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />,          label: 'SYNCING...',  cls: dm ? 'text-amber-400 bg-amber-900/30 animate-pulse' : 'text-amber-700 bg-amber-100 animate-pulse' },
     offline: { icon: <WifiOff className="w-3.5 h-3.5" />,                         label: 'OFFLINE',     cls: dm ? 'text-rose-400 bg-rose-900/30' : 'text-rose-700 bg-rose-100' },
-  }[status] || config.synced;
+  }[status] || { icon: <Wifi className="w-3.5 h-3.5" />, label: 'SYNCED', cls: dm ? 'text-emerald-400 bg-emerald-900/30' : 'text-[#007f5f] bg-[#e6fceb]' };
+
+  const getTimeAgo = (date) => {
+    if (!date) return '';
+    const diff = Math.floor((new Date() - new Date(date)) / 60000);
+    if (diff < 1) return 'JUST NOW';
+    if (diff < 60) return `${diff}M AGO`;
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
-    <div className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold tracking-wider transition-colors border-none ${config.cls}`}>
-      {config.icon}
-      {!collapsed && config.label}
+    <div className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl text-[10px] font-bold tracking-wider transition-all border-none ${config.cls}`}>
+      <div className="flex items-center gap-1.5">
+        {config.icon}
+        {!collapsed && config.label}
+      </div>
+      {!collapsed && lastSync && status === 'synced' && (
+        <span className="opacity-50 text-[8px] uppercase">{getTimeAgo(lastSync)}</span>
+      )}
     </div>
   );
 };
 
 export default function Sidebar() {
-  const { darkMode, setDarkMode, sidebarCollapsed, setSidebarCollapsed, syncStatus, logo, isAdminUnlocked, lockAdmin, currentUser } = useApp();
+  const { darkMode, setDarkMode, sidebarCollapsed, setSidebarCollapsed, syncStatus, lastSync, logo, isAdminUnlocked, lockAdmin, currentUser } = useApp();
   const dm = darkMode;
   const [appVersion, setAppVersion] = useState('1.0.0');
 
@@ -166,7 +179,7 @@ export default function Sidebar() {
 
         {/* Bottom Section */}
         <div className={`p-3 border-t flex flex-col gap-2 ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
-          <SyncBadge status={syncStatus} collapsed={sidebarCollapsed} dm={dm} />
+          <SyncBadge status={syncStatus} collapsed={sidebarCollapsed} dm={dm} lastSync={lastSync} />
           {!sidebarCollapsed && (
             <p className={`text-center text-[10px] font-bold tracking-wider ${dm ? 'text-slate-600' : 'text-slate-300'}`}>
               v{appVersion}

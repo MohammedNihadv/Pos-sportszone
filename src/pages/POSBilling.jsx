@@ -6,11 +6,11 @@ import CheckoutModal from '../components/CheckoutModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playSound } from '../utils/sounds';
 
-// ---- Add Product Quick Modal ----
-const COMMON_EMOJIS = ['👕','👟','🩳','🧢','🏐','⚽','🏀','🏏','🎾','🏅','🎒','⌚','🛡️','🏋️'];
+const PRODUCT_ICONS = []; // Fallback, will be replaced by context one
 
 function QuickAddModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ name: '', sku: '', price: '', stock: '', emoji: '👕' });
+  const { PRODUCT_ICONS } = useApp();
+  const [form, setForm] = useState({ name: '', sku: '', price: '', stock: '', emoji: '📦' });
   
   const handleSave = async () => {
     if (!form.name || !form.price) return;
@@ -33,8 +33,8 @@ function QuickAddModal({ onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-lg font-bold text-slate-800">Quick Add Product</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
@@ -48,22 +48,6 @@ function QuickAddModal({ onClose, onSave }) {
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-sm transition-all" />
             </div>
           ))}
-          
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-2 block uppercase tracking-wide">Pick an Icon</label>
-            <div className="flex flex-wrap gap-2">
-              {COMMON_EMOJIS.map(em => (
-                <button
-                  key={em}
-                  onClick={() => { playSound('tap'); setForm(p => ({ ...p, emoji: em })); }}
-                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border transition-all
-                    ${form.emoji === em ? 'bg-blue-50 border-blue-500 shadow-sm scale-110' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:scale-105'}`}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
         <button onClick={handleSave} className="w-full mt-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors">
           <Plus className="w-4 h-4 inline mr-2" />Save Product
@@ -75,7 +59,7 @@ function QuickAddModal({ onClose, onSave }) {
 
 function CartItem({ item }) {
   const { updateQty, updateItemPrice, removeFromCart } = useCart();
-  const { darkMode } = useApp();
+  const { darkMode, isAdminUnlocked, isOwner } = useApp();
   const dm = darkMode;
   return (
     <motion.div 
@@ -94,7 +78,8 @@ function CartItem({ item }) {
             type="number"
             value={item.price}
             onChange={(e) => updateItemPrice(item.id, e.target.value)}
-            className={`w-16 text-xs px-1 py-0.5 outline-none rounded transition-colors ${dm ? 'bg-slate-800 text-white focus:bg-slate-700' : 'bg-slate-50 text-slate-800 focus:bg-slate-200'}`}
+            readOnly={!isAdminUnlocked && !isOwner}
+            className={`w-16 text-xs px-1 py-0.5 outline-none rounded transition-colors ${dm ? 'bg-slate-800 text-white focus:bg-slate-700' : 'bg-slate-50 text-slate-800 focus:bg-slate-200'} ${(!isAdminUnlocked && !isOwner) ? 'cursor-not-allowed opacity-80' : ''}`}
           />
         </div>
         <div className="flex items-center gap-1.5 mt-2">
@@ -119,7 +104,6 @@ function CartItem({ item }) {
   );
 }
 
-// ---- Product Card with Animations ----
 function ProductCard({ product, dm, onAdd }) {
   const [showPlus, setShowPlus] = useState(false);
   const timerRef = useRef(null);
@@ -171,11 +155,10 @@ function ProductCard({ product, dm, onAdd }) {
   );
 }
 
-// ---- Main POS Content ----
 function POSContent() {
   const { 
     darkMode, addToast, products, setProducts, setSales, 
-    appSettings, saveAppSettings, refreshSales, refreshProducts, loadData,
+    appSettings, saveAppSettings, refreshSales, refreshProducts, refreshCustomers, refreshCredits, loadData,
     isAdminUnlocked, isOwner
   } = useApp();
   const { cart, addToCart, clearCart, discount, setDiscount, subtotal, discountAmount, cgst, sgst, grandTotal } = useCart();
@@ -189,23 +172,79 @@ function POSContent() {
 
   const filtered = (products || []).filter(p =>
     (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
-    (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
+    (String(p.sku || '')).toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter' && search.trim()) {
+      const exactMatch = filtered.find(p => String(p.sku || '').toLowerCase() === search.toLowerCase().trim());
+      const firstMatch = exactMatch || (filtered.length === 1 ? filtered[0] : null);
+      
+      if (firstMatch && firstMatch.stock > 0) {
+        addToCart(firstMatch);
+        setSearch('');
+        playSound('pop');
+        addToast(`${firstMatch.name} added to cart`, 'success');
+        e.preventDefault();
+      }
+    }
+  };
+
   const completeSale = useCallback(async (paymentData) => {
+    const now = new Date().toISOString();
+    let finalCustomerId = null;
+    
+    // saleData initialized at top scope for consistent access across blocks
     const saleData = {
+      date: now,
       total: grandTotal,
       discount: discountAmount,
       items: cart,
       paymentMethod: paymentData.paymentMethod,
       payments: paymentData.payments,
-      amountPaid: paymentData.amountPaid,
+      amountPaid: paymentData.amountPaid || 0,
       changeAmount: paymentData.changeAmount || 0,
       changeReturnMethod: paymentData.changeReturnMethod || null,
       paymentBreakdown: paymentData.paymentBreakdown,
+      customerId: null,
     };
 
-    // Calculate balance updates for live accounting
+    try {
+      if (window.api) {
+        // 1. If 'Pay Later', sync customer first
+        if (paymentData.paymentMethod === 'credit' && paymentData.creditCustomer) {
+          finalCustomerId = await window.api.saveCustomer({
+            name: paymentData.creditCustomer,
+            phone: paymentData.customerPhone || '',
+            email: '',
+            last_order: now
+          });
+          saleData.customerId = finalCustomerId;
+        }
+
+        // 2. Save the Main Sale
+        await window.api.saveSale(saleData);
+        
+        // 3. Record Credit entry
+        if (paymentData.paymentMethod === 'credit') {
+          await window.api.saveCredit({
+            customer_id: finalCustomerId,
+            customer_name: paymentData.creditCustomer,
+            total: grandTotal,
+            paid: paymentData.amountPaid || 0,
+            pending: paymentData.creditPending || 0,
+            items: (cart || []).map(i => i.name).join(', '),
+            date: now.split('T')[0]
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Sale Processing Error:", err);
+      addToast("Failed to record transaction properly", "error");
+      return; 
+    }
+
+    // Balance calculations
     let cashDelta = 0;
     let upiDelta = 0;
     (paymentData.payments || []).forEach(p => {
@@ -220,30 +259,21 @@ function POSContent() {
     }
 
     if (window.api) {
-      await window.api.saveSale(saleData);
-      
-      // Update real-time balances atomically in the database
       const updates = {};
       if (cashDelta !== 0) updates.cashBalance = cashDelta;
       if (upiDelta !== 0) updates.upiBalance = upiDelta;
-      
-      if (Object.keys(updates).length > 0) {
-        await window.api.incrementSettings(updates);
-      }
+      if (Object.keys(updates).length > 0) await window.api.incrementSettings(updates);
 
-      // Fetch fresh data to update UI immediately
       await Promise.all([
-        refreshSales(),
-        refreshProducts(),
-        loadData() // Refresh settings/balances
-      ]);
+        refreshSales(), refreshProducts(), refreshCredits(), loadData(), refreshCustomers()
+      ].filter(Boolean));
     } else {
-      setSales(prev => [{ ...saleData, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);
+      // Local fallback for dev/browser
+      setSales(prev => [{ ...saleData, id: Date.now(), created_at: now }, ...prev]);
       setProducts(prev => prev.map(p => {
         const cartItem = cart.find(i => i.id === p.id);
         return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
       }));
-      // Local fallback
       const newSettings = {
         ...appSettings,
         cashBalance: (appSettings.cashBalance || 0) + cashDelta,
@@ -252,21 +282,15 @@ function POSContent() {
       saveAppSettings(newSettings);
     }
 
-    const changeInfo = paymentData.changeAmount > 0 
-      ? ` | Change: ₹${paymentData.changeAmount.toFixed(2)} (${paymentData.changeReturnMethod === 'store-upi' ? 'Store UPI' : 'Cash'})` 
-      : '';
-    
+    const changeInfo = paymentData.changeAmount > 0 ? ` | Change: ₹${paymentData.changeAmount.toFixed(2)}` : '';
     playSound('success');
     addToast(`Sale of ₹${grandTotal.toFixed(2)} completed! 🎉${changeInfo}`, 'success');
-
-    // The CheckoutModal will stay on the "Success" screen now.
-    // The user can click "Receipt" or "WhatsApp" there manually.
-  }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales]);
+  }, [grandTotal, discountAmount, cart, addToast, setProducts, setSales, refreshSales, refreshProducts, refreshCredits, loadData, refreshCustomers, appSettings, saveAppSettings]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
-      if (showCheckout) return; // CheckoutModal handles its own shortcuts
+      if (showCheckout) return; 
       if (e.key === 'Escape') { clearCart(); }
       if (e.key === 'F9' || e.key === 'Enter') {
         if (e.target.tagName !== 'INPUT' && cart.length > 0) {
@@ -291,7 +315,6 @@ function POSContent() {
 
   return (
     <div className={`flex h-full ${dm ? 'bg-slate-950' : 'bg-slate-50'}`} style={{height:'calc(100vh - 64px)'}}>
-      {/* Left Panel: Product Grid */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden p-6 gap-5">
         <div className="flex justify-between items-end mb-2">
           <div>
@@ -300,7 +323,6 @@ function POSContent() {
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
           <Scan className="w-5 h-5 text-slate-400 flex-shrink-0" />
           <input
@@ -308,6 +330,7 @@ function POSContent() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search product name or SKU... (auto-focus)"
             className={`flex-1 outline-none bg-transparent text-sm ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800 placeholder-slate-400'}`}
           />
@@ -321,10 +344,9 @@ function POSContent() {
           )}
         </div>
 
-        {/* Product Grid */}
         <div className="flex-1 overflow-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {filtered.map(product => (
+            {(filtered || []).map(product => (
               <ProductCard key={product.id} product={product} dm={dm} onAdd={() => addToCart(product)} />
             ))}
           </div>
@@ -338,9 +360,7 @@ function POSContent() {
         </div>
       </div>
 
-      {/* Right Panel: Cart */}
       <div className={`w-80 flex flex-col flex-shrink-0 border-l ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-        {/* Cart Header */}
         <div className={`px-4 py-3 border-b flex items-center justify-between ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <div>
             <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Current Order</h3>
@@ -353,22 +373,18 @@ function POSContent() {
           )}
         </div>
 
-        {/* Cart Items */}
         <div className="flex-1 overflow-auto px-4">
-          {cart.length === 0 ? (
+          {(cart || []).length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
               <ShoppingCartIcon />
               <p className="text-sm font-medium mt-3">Cart is empty</p>
               <p className="text-xs mt-1 text-center">Click a product or search SKU to add items</p>
             </div>
           ) : (
-            cart.map(item => <CartItem key={item.id} item={item} />)
+            (cart || []).map(item => <CartItem key={item.id} item={item} />)
           )}
         </div>
 
-
-
-        {/* GST Summary */}
         <div className={`px-4 py-3 border-t space-y-1.5 ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
           <SummaryRow label="Subtotal" value={`₹${subtotal.toLocaleString()}`} dm={dm} />
           {discountAmount > 0 && <SummaryRow label="Discount" value={`-₹${discountAmount.toFixed(2)}`} valueClass="text-red-500" dm={dm} />}
@@ -380,7 +396,6 @@ function POSContent() {
           </div>
         </div>
 
-        {/* Checkout Button — replaces old payment method buttons */}
         <div className={`px-4 py-4 border-t ${dm ? 'border-slate-700' : 'border-slate-200'}`}>
           <button
             disabled={cart.length === 0}
@@ -393,7 +408,6 @@ function POSContent() {
         </div>
       </div>
 
-      {/* Advanced Checkout Modal */}
       {showCheckout && (
         <CheckoutModal
           onClose={() => setShowCheckout(false)}
@@ -423,7 +437,6 @@ function SummaryRow({ label, value, valueClass = '', dm }) {
   );
 }
 
-// Wrap with CartProvider
 export default function POSBilling() {
   return (
     <CartProvider>

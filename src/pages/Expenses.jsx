@@ -24,27 +24,34 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
     date: new Date().toISOString().split('T')[0], category: categories[0]?.name || 'Other', description: '', amount: '',
     paymentMethod: 'Cash'
   });
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
 
   const handleCategoryChange = async (e) => {
     const val = e.target.value;
     if (val === '###NEW###') {
-      const newName = window.prompt('Enter new expense category name:');
-      if (newName?.trim()) {
-        const newCat = { name: newName.trim() };
-        if (window.api) {
-          const saved = await window.api.saveExpenseCategory(newCat);
-          setExpenseCategories(prev => [...prev, saved]);
-        } else {
-          setExpenseCategories(prev => [...prev, { ...newCat, id: Date.now() }]);
-        }
-        setForm(p => ({ ...p, category: newCat.name }));
-        addToast(`Category ${newCat.name} added`, 'success');
-      } else {
-        setForm(p => ({ ...p, category: categories[0]?.name || 'Other' }));
-      }
+      setIsAddingNew(true);
+      setNewName('');
     } else {
       setForm(p => ({ ...p, category: val }));
     }
+  };
+
+  const confirmNewCategory = async () => {
+    if (!newName.trim()) {
+      setIsAddingNew(false);
+      return;
+    }
+    const newCat = { name: newName.trim() };
+    if (window.api) {
+      const saved = await window.api.saveExpenseCategory(newCat);
+      setExpenseCategories(prev => [...prev, saved]);
+    } else {
+      setExpenseCategories(prev => [...prev, { ...newCat, id: Date.now() }]);
+    }
+    setForm(p => ({ ...p, category: newCat.name }));
+    setIsAddingNew(false);
+    addToast(`Category ${newCat.name} added`, 'success');
   };
 
 
@@ -59,8 +66,8 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Expense' : 'Edit Expense'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
@@ -71,10 +78,26 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
             <div><label className={labelCls}>Amount (₹)</label><input type="number" className={inputCls} value={form.amount} onChange={e => setForm(p => ({...p, amount: e.target.value}))} /></div>
           </div>
           <div><label className={labelCls}>Category</label>
-            <select className={inputCls} value={form.category} onChange={handleCategoryChange}>
-              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              <option value="###NEW###">— Add New Category —</option>
-            </select>
+            {isAddingNew ? (
+              <div className="flex gap-2">
+                <input 
+                  autoFocus
+                  className={inputCls} 
+                  placeholder="Enter category name..." 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && confirmNewCategory()}
+                />
+                <button onClick={confirmNewCategory} className="px-3 bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm">Add</button>
+                <button onClick={() => setIsAddingNew(false)} className="px-3 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">X</button>
+              </div>
+            ) : (
+              <select className={inputCls} value={form.category} onChange={handleCategoryChange}>
+                <option value="" disabled>-- Select Category --</option>
+                <option value="###NEW###">— Add New Category —</option>
+                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            )}
           </div>
           <div><label className={labelCls}>Description</label>
             <input className={inputCls} value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} placeholder="e.g. March shop rent" />
@@ -99,7 +122,7 @@ function ExpenseModal({ expense, onClose, onSave, dm, categories, setExpenseCate
 }
 
 export default function Expenses() {
-  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories, isOwner, loadData } = useApp();
+  const { darkMode, addToast, expenses, setExpenses, expenseCategories: categories, setExpenseCategories, isOwner } = useApp();
   const dm = darkMode;
   const [modal, setModal] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
@@ -109,44 +132,28 @@ export default function Expenses() {
 
   const withBalance = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => new Date(a.date) - new Date(b.date));
-    let running = 0;
-    return sorted.map(e => { running += e.amount; return { ...e, running }; }).reverse();
+    const result = [];
+    let acc = 0;
+    for (const e of sorted) {
+      acc += e.amount;
+      result.push({ ...e, running: acc });
+    }
+    return result.reverse();
   }, [filtered]);
 
   const handleSave = async (entry) => {
     if (window.api) {
       const result = await window.api.saveExpense(entry);
-      
-      // Update account balances (decrement)
-      const updates = {};
-      const method = (entry.paymentMethod || 'Cash').toLowerCase();
-      if (method === 'cash') updates.cashBalance = -entry.amount;
-      else updates.upiBalance = -entry.amount;
-      
-      await window.api.incrementSettings(updates);
-      
       setExpenses(prev => [{ ...entry, id: result?.id || Date.now() }, ...prev]);
-      
-      // Refresh global app data to update balances in UI
-      await loadData();
     } else {
       setExpenses(prev => [{ ...entry, id: Date.now() }, ...prev]);
     }
     addToast(`Expense added: ₹${entry.amount.toLocaleString()}`, 'warning');
   };
 
-  const handleDelete = async (id, category, amount, method) => {
+  const handleDelete = async (id, category) => {
     if (window.api) {
       await window.api.deleteExpense(id);
-      
-      // Restore balance
-      const updates = {};
-      const pm = (method || 'Cash').toLowerCase();
-      if (pm === 'cash') updates.cashBalance = (amount || 0);
-      else updates.upiBalance = (amount || 0);
-      
-      await window.api.incrementSettings(updates);
-      await loadData();
     }
     setExpenses(prev => prev.filter(e => e.id !== id));
     addToast(`${category} expense removed`, 'info');
@@ -160,11 +167,11 @@ export default function Expenses() {
   const th = `px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div className="flex justify-between items-end flex-wrap gap-3">
         <div>
-          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Daily Expenses</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Daily Expenses</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
         </div>
         {!isOwner && (
           <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
@@ -230,7 +237,7 @@ export default function Expenses() {
                           <button onClick={() => setModal(e)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDelete(e.id, e.category, e.amount, e.paymentMethod)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                          <button onClick={() => handleDelete(e.id, e.category)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -244,7 +251,8 @@ export default function Expenses() {
                   <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
                     <td colSpan={3} className={`px-4 py-3 text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total ({filtered.length})</td>
                     <td className="px-4 py-3 text-right text-red-500">₹{total.toLocaleString()}</td>
-                    <td colSpan={2}></td>
+                    <td />
+                    {!isOwner && <td />}
                   </tr>
                 </tfoot>
               )}

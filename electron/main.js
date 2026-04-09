@@ -2,8 +2,15 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import isDev from 'electron-is-dev';
-import getDb, { initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint, getUsers, updateUserPin, saveUser } from './db.js';
+
+const isDev = !app.isPackaged;
+import getDb, { 
+  initDb, checkDatabaseIntegrity, repairDatabase, startPeriodicCheckpoint, 
+  getUsers, updateUserPin, saveUser,
+  getCustomers, saveCustomer, deleteCustomer,
+  getCredits, saveCredit, deleteCredit,
+  clearAuditLogs, updateCustomerStats
+} from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
@@ -34,22 +41,17 @@ function createWindow() {
     minHeight: 700,
     title: 'Sports Zone',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
     },
     icon: path.join(__dirname, '../public/logo.png'),
-    backgroundColor: '#0f172a', // Dark theme background to avoid white flash
+    backgroundColor: '#0f172a',
   });
 
   mainWindow.setMenu(null);
 
-  const url = isDev
-    ? 'http://localhost:5173'
-    : `file://${path.join(__dirname, '../dist/index.html')}`;
-
-  // Production check for existence
-  if (!isDev) {
+  if (app.isPackaged) {
     const indexPath = path.join(__dirname, '../dist/index.html');
     if (!fs.existsSync(indexPath)) {
       dialog.showErrorBox(
@@ -57,10 +59,11 @@ function createWindow() {
         `Required assets missing at: ${indexPath}\nPlease ensure "npm run build" was successful before packaging.`
       );
     }
+    mainWindow.loadFile(indexPath);
+  } else {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
   }
-
-  mainWindow.loadURL(url);
-  if (isDev) mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
@@ -153,7 +156,7 @@ safeHandle('get-system-health', () => {
     ? path.join(process.cwd(), 'shop.db')
     : path.join(app.getPath('userData'), 'shop.db');
   let dbSize = 0;
-  try { dbSize = fs.statSync(dbPath).size; } catch {}
+  try { dbSize = fs.statSync(dbPath).size; } catch (err) { /* ignore */ }
 
   const counts = {};
   ['products', 'sales', 'expenses', 'purchases', 'suppliers', 'categories'].forEach(t => {
@@ -161,11 +164,11 @@ safeHandle('get-system-health', () => {
   });
 
   return {
-    version: app.getVersion(),
+    version: app.getVersion() || '4.0.2',
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     platform: process.platform,
-    dbSizeKB: (dbSize / 1024).toFixed(1),
+    dbSizeKB: (dbSize / 1024).toFixed(1) || '0.0',
     recordCounts: counts,
     uptime: Math.round(process.uptime()),
   };
@@ -307,7 +310,7 @@ safeHandle('save-user', async (_, user) => {
 function logAudit(action, details) {
   try {
     getDb().prepare("INSERT INTO audit_logs (action, details) VALUES (?, ?)").run(action, details);
-  } catch(e) { logError('AuditLog', e); }
+  } catch(e) { logError('AuditLog', e); /* already logged */ }
 }
 
 // ─── IPC: Products ───
@@ -316,13 +319,23 @@ safeHandle('get-products', () => {
 });
 
 const handleSaveProduct = async (_, p) => {
+  const db = getDb();
   if (p.id) {
-    getDb().prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
+    db.prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, p.id);
     logAudit('Updated Product', `Product updated: ${p.name} (SKU: ${p.sku})`);
     return p;
   } else {
-    const info = getDb().prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    // Check if a product with this SKU already exists to convert to an UPDATE if ID is missing from frontend
+    const existing = db.prepare('SELECT id FROM products WHERE LOWER(sku) = LOWER(?)').get(String(p.sku || '').trim());
+    if (existing) {
+      db.prepare('UPDATE products SET name=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
+        .run(p.name, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, existing.id);
+      logAudit('Updated Product (Sync)', `Product SKU ${p.sku} synced/updated`);
+      return { ...p, id: existing.id };
+    }
+    
+    const info = db.prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji);
     logAudit('Added Product', `New product created: ${p.name} (Price: ${p.price})`);
     return { ...p, id: info.lastInsertRowid };
@@ -332,7 +345,6 @@ const handleSaveProduct = async (_, p) => {
 safeHandle('save-product', handleSaveProduct);
 safeHandle('add-product', handleSaveProduct);
 safeHandle('update-product', handleSaveProduct);
-
 safeHandle('delete-product', (_, id) => {
   const p = getDb().prepare('SELECT name FROM products WHERE id=?').get(id);
   getDb().prepare('DELETE FROM products WHERE id=?').run(id);
@@ -372,8 +384,8 @@ safeHandle('save-sale', (_, sale) => {
       logAudit('Updated Sale', `Sale ID ${s.id} updated (Method: ${s.paymentMethod})`);
       return { id: s.id };
     } else {
-      const info = db.prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate);
+      const info = db.prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method, date, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.customerId || null);
 
       const updateStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
       if (s.items && Array.isArray(s.items)) {
@@ -381,6 +393,13 @@ safeHandle('save-sale', (_, sale) => {
           updateStock.run(item.qty, item.id);
         });
       }
+
+      // Update customer stats if linked
+      if (s.creditCustomer || s.customerName) {
+        const cName = s.creditCustomer || s.customerName;
+        updateCustomerStats(cName, s.total, saleDate);
+      }
+
       return { id: info.lastInsertRowid };
     }
   });
@@ -395,7 +414,12 @@ safeHandle('save-sale', (_, sale) => {
 
 safeHandle('get-sales', () => {
   try {
-    const rawSales = getDb().prepare('SELECT * FROM sales ORDER BY date DESC').all();
+    const rawSales = getDb().prepare(`
+      SELECT s.*, c.name as customer_name 
+      FROM sales s 
+      LEFT JOIN customers c ON s.customer_id = c.id 
+      ORDER BY s.date DESC
+    `).all();
     return rawSales.map(s => {
       let items = [];
       let paymentBreakdown = [];
@@ -592,3 +616,48 @@ safeHandle('open-external-url', async (_, url) => {
 safeHandle('get-audit-logs', () => {
   return getDb().prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500').all();
 });
+
+// ─── IPC: Customers ───
+safeHandle('get-customers', () => getCustomers());
+safeHandle('save-customer', (_, customer) => {
+  const res = saveCustomer(customer);
+  logAudit('Customer Saved', `Customer: ${customer.name}`);
+  return res;
+});
+safeHandle('delete-customer', (_, id) => {
+  const res = deleteCustomer(id);
+  logAudit('Customer Deleted', `ID: ${id}`);
+  return res;
+});
+
+// ─── IPC: Credits (Pay Later) ───
+safeHandle('get-credits', () => getCredits());
+safeHandle('save-credit', (_, credit) => {
+  const res = saveCredit(credit);
+  logAudit('Credit Recorded', `Customer: ${credit.customer_name || 'Unknown'}, Amount: ${credit.pending || 0}`);
+  return res;
+});
+
+safeHandle('delete-credit', (_, id) => {
+  const res = deleteCredit(id);
+  logAudit('Credit Deleted', `Record ID: ${id}`);
+  return res;
+});
+
+// ─── IPC: Audit Logs ───
+safeHandle('clear-audit-logs', async () => {
+  clearAuditLogs();
+  logAudit('Audit Trail Cleared', 'Local audit logs were wiped by user');
+  
+  // Also clear cloud logs if online
+  try {
+    const { supabase } = await import('./supabase.js');
+    const { error } = await supabase.from('cloud_audit_logs').delete().neq('local_id', 0);
+    if (error) logError('CloudAuditClear', error);
+  } catch (err) {
+    logError('CloudAuditClear:Import', err);
+  }
+  
+  return true;
+});
+

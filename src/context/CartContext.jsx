@@ -6,7 +6,7 @@ const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const { addToast, appSettings } = useApp();
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => recoverSession() || []);
   const [discount, setDiscount] = useState(0);
   const [recoveryOffered, setRecoveryOffered] = useState(false);
 
@@ -14,16 +14,13 @@ export function CartProvider({ children }) {
   const cgstRate = (parseFloat(appSettings?.cgstRate) || 0) / 100;
   const sgstRate = (parseFloat(appSettings?.sgstRate) || 0) / 100;
 
-  // Check for crash recovery on mount
+  // Show recovery toast on mount if cart was recovered
   useEffect(() => {
-    if (recoveryOffered) return;
-    const recoveredCart = recoverSession();
-    if (recoveredCart && recoveredCart.length > 0) {
-      setCart(recoveredCart);
-      addToast(`Recovered ${recoveredCart.length} item(s) from previous session`, 'success');
+    if (cart.length > 0 && !recoveryOffered) {
+      addToast(`Recovered ${cart.length} item(s) from previous session`, 'success');
+      setRecoveryOffered(true);
     }
-    setRecoveryOffered(true);
-  }, [recoveryOffered, addToast]);
+  }, []); // Only on mount
 
   // Persist cart on every change
   useEffect(() => {

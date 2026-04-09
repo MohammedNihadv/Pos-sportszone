@@ -12,7 +12,7 @@ function getUniqueSuppliers(suppliers, purchases) {
 
 const OPENING_BALANCE = 0;
 
-function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
+function EntryModal({ entry, onClose, onSave, dm, suppliersList, setSuppliers, addToast }) {
   const isNew = !entry;
   const [form, setForm] = useState(entry || {
     date: new Date().toISOString().split('T')[0], 
@@ -23,6 +23,35 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
     note: '',
     paymentMethod: 'Cash'
   });
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  const handleSupplierChange = async (e) => {
+    const val = e.target.value;
+    if (val === '###NEW###') {
+      setIsAddingNew(true);
+      setNewName('');
+    } else {
+      setForm(p => ({ ...p, supplier: val }));
+    }
+  };
+
+  const confirmNewSupplier = async () => {
+    if (!newName.trim()) {
+      setIsAddingNew(false);
+      return;
+    }
+    const newSup = { name: newName.trim(), phone: '' };
+    if (window.api) {
+      const saved = await window.api.saveSupplier(newSup);
+      setSuppliers(prev => [...prev, saved]);
+    } else {
+      setSuppliers(prev => [...prev, { ...newSup, id: Date.now() }]);
+    }
+    setForm(p => ({ ...p, supplier: newSup.name }));
+    setIsAddingNew(false);
+    addToast(`Supplier ${newSup.name} added`, 'success');
+  };
 
   const handleSave = () => {
     onSave({
@@ -38,8 +67,8 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>{isNew ? 'Add Ledger Entry' : 'Edit Ledger Entry'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
@@ -50,9 +79,26 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
             <div><label className={labelCls}>Invoice / Ref #</label><input className={inputCls} value={form.inv} onChange={e => setForm(p => ({...p, inv: e.target.value}))} placeholder="Optional" /></div>
           </div>
           <div><label className={labelCls}>Supplier</label>
-            <select className={inputCls} value={form.supplier} onChange={e => setForm(p => ({...p, supplier: e.target.value}))}>
-              {suppliersList.map(s => <option key={s}>{s}</option>)}
-            </select>
+            {isAddingNew ? (
+              <div className="flex gap-2">
+                <input 
+                  autoFocus
+                  className={inputCls} 
+                  placeholder="Enter supplier name..." 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && confirmNewSupplier()}
+                />
+                <button onClick={confirmNewSupplier} className="px-3 bg-green-600 text-white rounded-lg text-xs font-bold">Add</button>
+                <button onClick={() => setIsAddingNew(false)} className="px-3 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">X</button>
+              </div>
+            ) : (
+              <select className={inputCls} value={form.supplier} onChange={handleSupplierChange}>
+                <option value="" disabled>-- Select Supplier --</option>
+                <option value="###NEW###">— Add New Supplier —</option>
+                {suppliersList.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Debit (₹ Purchased)</label><input type="number" className={inputCls} value={form.debit || ''} onChange={e => setForm(p => ({...p, debit: e.target.value}))} placeholder="0" /></div>
@@ -84,7 +130,7 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList }) {
 }
 
 export default function PurchaseLedger() {
-  const { darkMode, addToast, purchases, setPurchases, suppliers, isOwner } = useApp();
+  const { darkMode, addToast, purchases, setPurchases, suppliers, setSuppliers, isOwner } = useApp();
   const dm = darkMode;
   
   const [openingBalance, setOpeningBalance] = useState(OPENING_BALANCE);
@@ -122,11 +168,13 @@ export default function PurchaseLedger() {
 
   const withBalance = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => a.rawDate - b.rawDate);
-    let running = openingBalance;
-    return sorted.map(e => {
-      running += (e.debit || 0) - (e.credit || 0);
-      return { ...e, running };
-    });
+    const result = [];
+    let acc = openingBalance;
+    for (const e of sorted) {
+      acc += (e.debit || 0) - (e.credit || 0);
+      result.push({ ...e, running: acc });
+    }
+    return result;
   }, [filtered, openingBalance]);
 
   const totalDebit = filtered.reduce((s, e) => s + (e.debit || 0), 0);
@@ -175,11 +223,11 @@ export default function PurchaseLedger() {
   const th = `px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl mx-auto pb-20">
+    <div className="p-6 space-y-5">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 mb-2">
         <div>
-          <h2 className={`text-3xl font-bold tracking-tight ${dm ? 'text-white' : 'text-slate-900'}`}>Purchase Ledger</h2>
-          <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier transactions — synced with your purchases database</p>
+          <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Purchase Ledger</h2>
+          <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Supplier transactions — synced with your purchases database</p>
         </div>
         {!isOwner && (
           <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
@@ -333,7 +381,15 @@ export default function PurchaseLedger() {
       </div>
 
       {(modal === 'new' || (modal && modal.id)) && (
-        <EntryModal suppliersList={supplierList} entry={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} />
+        <EntryModal 
+          suppliersList={supplierList} 
+          setSuppliers={setSuppliers} 
+          addToast={addToast} 
+          entry={modal === 'new' ? null : modal} 
+          onClose={() => setModal(null)} 
+          onSave={handleSave} 
+          dm={dm} 
+        />
       )}
     </div>
   );
