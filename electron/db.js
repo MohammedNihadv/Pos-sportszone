@@ -94,6 +94,8 @@ export function initDb() {
     )
   `).run();
 
+  try { db.prepare("ALTER TABLE purchases ADD COLUMN payment_breakdown JSON").run(); } catch(e){ /* ignore */ }
+
   // Categories table
   db.prepare(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -138,9 +140,24 @@ export function initDb() {
       user_role TEXT DEFAULT 'Owner',
       action TEXT NOT NULL,
       details TEXT,
-      timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+      timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+      machine_id TEXT,
+      hostname TEXT
     )
   `).run();
+
+  // Add machine_id and hostname to tables
+  const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs'];
+  syncTables.forEach(t => {
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN machine_id TEXT`).run(); } catch(e){}
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN hostname TEXT`).run(); } catch(e){}
+  });
+
+  // Soft Delete Migrations (Phase 15)
+  const softDeleteTables = ['products', 'expense_categories', 'sales', 'expenses', 'purchases', 'categories', 'suppliers', 'users', 'customers', 'credits'];
+  softDeleteTables.forEach(t => {
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN is_deleted INTEGER DEFAULT 0`).run(); } catch(e){}
+  });
 
   // Customers table
   db.prepare(`
@@ -362,7 +379,7 @@ export function closeDb() {
 
 // User methods
 export function getUsers() {
-  return getDb().prepare('SELECT * FROM users').all();
+  return getDb().prepare('SELECT * FROM users WHERE is_deleted = 0').all();
 }
 
 export function updateUserPin(id, newPin) {
@@ -381,37 +398,38 @@ export function saveUser(user) {
 
 // Customer Methods
 export function getCustomers() {
-  return getDb().prepare('SELECT * FROM customers ORDER BY name').all();
+  return getDb().prepare('SELECT * FROM customers WHERE is_deleted = 0 ORDER BY name').all();
 }
 
 export function saveCustomer(c) {
-  // If we have an ID, it's an update
+  const db = getDb();
+  // 1. If we have an ID, it's a direct update
   if (c.id) {
-    getDb().prepare('UPDATE customers SET name = ?, phone = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+    db.prepare('UPDATE customers SET name = ?, phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
       .run(c.name, c.phone, c.email, c.orders || 0, c.total || 0, c.last_order || null, c.id);
     return c.id;
   }
   
-  // Try to find if customer exists by phone to prevent duplicates
+  // 2. Check for existing (including deleted) by phone
   if (c.phone) {
-    const existing = getDb().prepare('SELECT id FROM customers WHERE phone = ?').get(c.phone);
+    const existing = db.prepare('SELECT id, is_deleted FROM customers WHERE phone = ?').get(c.phone);
     if (existing) {
-      getDb().prepare('UPDATE customers SET name = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+      db.prepare('UPDATE customers SET name = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
         .run(c.name, c.email, c.orders || 0, c.total || 0, c.last_order || null, existing.id);
       return existing.id;
     }
   }
 
-  // If we have a name, try to find by name if phone not provided or not found
-  const existingByName = getDb().prepare('SELECT id FROM customers WHERE name = ?').get(c.name);
+  // 3. Check for existing (including deleted) by name
+  const existingByName = db.prepare('SELECT id, is_deleted FROM customers WHERE name = ?').get(c.name);
   if (existingByName) {
-    getDb().prepare('UPDATE customers SET phone = ?, email = ?, orders = ?, total = ?, last_order = ? WHERE id = ?')
+    db.prepare('UPDATE customers SET phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
       .run(c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null, existingByName.id);
     return existingByName.id;
   }
 
-  // New customer
-  const info = getDb().prepare('INSERT INTO customers (name, phone, email, orders, total, last_order) VALUES (?, ?, ?, ?, ?, ?)')
+  // 4. New customer
+  const info = db.prepare('INSERT INTO customers (name, phone, email, orders, total, last_order) VALUES (?, ?, ?, ?, ?, ?)')
     .run(c.name, c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null);
   return info.lastInsertRowid;
 }
@@ -437,12 +455,12 @@ export function updateCustomerStats(nameOrId, amount, date) {
 }
 
 export function deleteCustomer(id) {
-  return getDb().prepare('DELETE FROM customers WHERE id = ?').run(id);
+  return getDb().prepare('UPDATE customers SET is_deleted = 1 WHERE id = ?').run(id);
 }
 
 // Credit Methods
 export function getCredits() {
-  return getDb().prepare('SELECT * FROM credits ORDER BY date DESC').all();
+  return getDb().prepare('SELECT * FROM credits WHERE is_deleted = 0 ORDER BY date DESC').all();
 }
 
 export function saveCredit(cr) {
@@ -455,7 +473,7 @@ export function saveCredit(cr) {
 }
 
 export function deleteCredit(id) {
-  return getDb().prepare('DELETE FROM credits WHERE id = ?').run(id);
+  return getDb().prepare('UPDATE credits SET is_deleted = 1 WHERE id = ?').run(id);
 }
 
 // Remote Commands

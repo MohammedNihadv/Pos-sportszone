@@ -76,7 +76,8 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', (_, data) => cb(data)),
 
   // ─── NEW: Cloud Sync ───
-  syncToCloud: () => ipcRenderer.invoke('sync-to-cloud'),
+  syncToCloud: (role) => ipcRenderer.invoke('sync-to-cloud', role),
+  setActiveRole: (role) => ipcRenderer.invoke('set-active-role', role),
   getLastSyncTime: () => ipcRenderer.invoke('get-last-sync-time'),
   pullFromCloud: () => ipcRenderer.invoke('pull-from-cloud'),
 

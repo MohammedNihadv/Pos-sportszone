@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, X, TrendingUp, Edit2, Trash2, Check } from 'lucide-react';
+import { Plus, Search, X, TrendingUp, Edit2, Trash2, Check, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import DateRangePicker from '../components/DateRangePicker';
 
 
 function SaleModal({ sale, onClose, onSave, dm }) {
@@ -160,6 +161,15 @@ function SaleModal({ sale, onClose, onSave, dm }) {
 export default function SalesLedger() {
   const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner } = useApp();
   const dm = darkMode;
+
+  // Robust path to "YYYY-MM-DD" matching the date picker
+  const toYMD = (d) => {
+    if (!d) return '';
+    const date = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
   // Map live POS sales to ledger format + allow manual entries
   const [manualSales, setManualSales] = useState([]);
   const allSales = useMemo(() => {
@@ -191,14 +201,21 @@ export default function SalesLedger() {
   }, [liveSales, manualSales]);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
-  const [dateFilter, setDateFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const filtered = useMemo(() => allSales.filter(s => {
     const matchesSearch = (s.description || '').toLowerCase().includes(search.toLowerCase()) || (s.inv && s.inv.includes(search));
-    const saleYMD = s.rawDate instanceof Date && !isNaN(s.rawDate) ? s.rawDate.toISOString().split('T')[0] : '';
-    const matchesDate = !dateFilter || saleYMD === dateFilter;
-    return matchesSearch && matchesDate;
-  }), [allSales, search, dateFilter]);
+    const saleYMD = toYMD(s.rawDate);
+    
+    let matchesRange = true;
+    if (startDate || endDate) {
+      if (startDate && saleYMD < startDate) matchesRange = false;
+      if (endDate && saleYMD > endDate) matchesRange = false;
+    }
+
+    return matchesSearch && matchesRange;
+  }), [allSales, search, startDate, endDate]);
 
   const totals = useMemo(() => filtered.reduce((acc, s) => ({
     cost: acc.cost + s.cost,
@@ -307,19 +324,13 @@ export default function SalesLedger() {
               className={`flex-1 text-sm outline-none bg-transparent ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800'}`} />
           </div>
           <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 items-center mt-2 sm:mt-0">
-            <div className={`relative flex items-center px-3 py-1.5 rounded-xl border transition-all ${dm ? 'bg-slate-800 border-slate-700 focus-within:border-blue-500' : 'bg-white border-slate-200 focus-within:border-blue-500'}`}>
-              <input 
-                type="date" 
-                value={dateFilter} 
-                onChange={e => setDateFilter(e.target.value)}
-                className={`text-xs outline-none bg-transparent ${dm ? 'text-white' : 'text-slate-700'}`} 
-              />
-            </div>
-            {dateFilter && (
-              <button onClick={() => setDateFilter('')} className="p-1 px-2 text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
-                <X className="w-3.5 h-3.5" /> Clear
-              </button>
-            )}
+            <DateRangePicker 
+              startDate={startDate} 
+              endDate={endDate} 
+              setStartDate={setStartDate} 
+              setEndDate={setEndDate} 
+              dm={dm} 
+            />
           </div>
         </div>
 

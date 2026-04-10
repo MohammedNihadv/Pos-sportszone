@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import isDev from 'electron-is-dev';
+import { logDeveloperError } from './telemetry.js';
 
 function getLogDir() {
   return isDev
@@ -49,8 +50,11 @@ export function logError(context, error) {
     const message = error instanceof Error ? error.stack : String(error);
     const entry = `[${timestamp}] [${context}] ${message}\n`;
     fs.appendFileSync(getLogPath(), entry);
+    
+    // Auto-sync to Developer Dashboard
+    logDeveloperError(`[${context}] ${message}`);
   } catch {
-    // silent fail — logging should never crash the app
+    // silent fail
   }
 }
 

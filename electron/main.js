@@ -14,7 +14,7 @@ import getDb, {
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
 import { startTelemetryLoop, logDeveloperError } from './telemetry.js';
-import { runFullSync, pullFromCloud, getLastSyncTime, startAutoSync } from './cloudSync.js';
+import { runFullSync, pullFromCloud, getLastSyncTime, startAutoSync, setActiveRole } from './cloudSync.js';
 import { downloadReceiptPDF, generateReceiptImage } from './receipt.js';
 import { clipboard, nativeImage } from 'electron';
 
@@ -160,7 +160,7 @@ safeHandle('get-system-health', () => {
 
   const counts = {};
   ['products', 'sales', 'expenses', 'purchases', 'suppliers', 'categories'].forEach(t => {
-    try { counts[t] = getDb().prepare(`SELECT COUNT(*) as c FROM ${t}`).get().c; } catch { counts[t] = 0; }
+    try { counts[t] = getDb().prepare(`SELECT COUNT(*) as c FROM ${t} WHERE is_deleted = 0`).get().c; } catch { counts[t] = 0; }
   });
 
   return {
@@ -315,26 +315,34 @@ function logAudit(action, details) {
 
 // ─── IPC: Products ───
 safeHandle('get-products', () => {
-  return getDb().prepare('SELECT * FROM products ORDER BY category, name').all();
+  return getDb().prepare('SELECT * FROM products WHERE is_deleted = 0 ORDER BY category, name').all();
 });
 
 const handleSaveProduct = async (_, p) => {
   const db = getDb();
   if (p.id) {
-    db.prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
+    db.prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, p.id);
     logAudit('Updated Product', `Product updated: ${p.name} (SKU: ${p.sku})`);
     return p;
   } else {
-    // Check if a product with this SKU already exists to convert to an UPDATE if ID is missing from frontend
-    const existing = db.prepare('SELECT id FROM products WHERE LOWER(sku) = LOWER(?)').get(String(p.sku || '').trim());
+    // Check for existing (including deleted) by SKU
+    const existing = db.prepare('SELECT id, is_deleted FROM products WHERE LOWER(sku) = LOWER(?)').get(String(p.sku || '').trim());
     if (existing) {
-      db.prepare('UPDATE products SET name=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=? WHERE id=?')
+      db.prepare('UPDATE products SET name=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
         .run(p.name, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, existing.id);
-      logAudit('Updated Product (Sync)', `Product SKU ${p.sku} synced/updated`);
+      logAudit('Updated Product (Restored/Sync)', `Product SKU ${p.sku} re-activated/synced`);
       return { ...p, id: existing.id };
     }
     
+    // Check if name already exists (including deleted) to prevent name collisions
+    const existingName = db.prepare('SELECT id FROM products WHERE LOWER(name) = LOWER(?)').get(p.name.trim());
+    if (existingName) {
+      db.prepare('UPDATE products SET sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
+        .run(p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, existingName.id);
+      return { ...p, id: existingName.id };
+    }
+
     const info = db.prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji);
     logAudit('Added Product', `New product created: ${p.name} (Price: ${p.price})`);
@@ -347,28 +355,34 @@ safeHandle('add-product', handleSaveProduct);
 safeHandle('update-product', handleSaveProduct);
 safeHandle('delete-product', (_, id) => {
   const p = getDb().prepare('SELECT name FROM products WHERE id=?').get(id);
-  getDb().prepare('DELETE FROM products WHERE id=?').run(id);
+  getDb().prepare('UPDATE products SET is_deleted = 1 WHERE id=?').run(id);
   if (p) logAudit('Deleted Product', `Product deleted: ${p.name}`);
   return true;
 });
 
 // ─── IPC: Expense Categories ───
 safeHandle('get-expense-categories', () => {
-  return getDb().prepare('SELECT * FROM expense_categories ORDER BY name').all();
+  return getDb().prepare('SELECT * FROM expense_categories WHERE is_deleted = 0 ORDER BY name').all();
 });
 
 safeHandle('save-expense-category', (_, cat) => {
+  const db = getDb();
   if (cat.id) {
-    getDb().prepare('UPDATE expense_categories SET name=? WHERE id=?').run(cat.name, cat.id);
+    db.prepare('UPDATE expense_categories SET name=?, is_deleted=0 WHERE id=?').run(cat.name, cat.id);
     return cat;
-  } else {
-    const info = getDb().prepare('INSERT INTO expense_categories (name) VALUES (?)').run(cat.name);
-    return { ...cat, id: info.lastInsertRowid };
   }
+  // Check for existing including deleted
+  const existing = db.prepare('SELECT id FROM expense_categories WHERE LOWER(name) = LOWER(?)').get(cat.name.trim());
+  if (existing) {
+    db.prepare('UPDATE expense_categories SET name=?, is_deleted=0 WHERE id=?').run(cat.name, existing.id);
+    return { ...cat, id: existing.id };
+  }
+  const info = db.prepare('INSERT INTO expense_categories (name) VALUES (?)').run(cat.name);
+  return { ...cat, id: info.lastInsertRowid };
 });
 
 safeHandle('delete-expense-category', (_, id) => {
-  getDb().prepare('DELETE FROM expense_categories WHERE id=?').run(id);
+  getDb().prepare('UPDATE expense_categories SET is_deleted = 1 WHERE id=?').run(id);
   return true;
 });
 
@@ -418,6 +432,7 @@ safeHandle('get-sales', () => {
       SELECT s.*, c.name as customer_name 
       FROM sales s 
       LEFT JOIN customers c ON s.customer_id = c.id 
+      WHERE s.is_deleted = 0
       ORDER BY s.date DESC
     `).all();
     return rawSales.map(s => {
@@ -451,7 +466,7 @@ safeHandle('delete-sale', (_, id) => {
 
   const transaction = getDb().transaction(() => {
     items.forEach(item => restoreStock.run(item.qty, item.id));
-    getDb().prepare('DELETE FROM sales WHERE id = ?').run(id);
+    getDb().prepare('UPDATE sales SET is_deleted = 1 WHERE id = ?').run(id);
   });
 
   transaction();
@@ -461,7 +476,7 @@ safeHandle('delete-sale', (_, id) => {
 
 // ─── IPC: Expenses ───
 safeHandle('get-expenses', () => {
-  return getDb().prepare('SELECT * FROM expenses ORDER BY date DESC').all();
+  return getDb().prepare('SELECT * FROM expenses WHERE is_deleted = 0 ORDER BY date DESC').all();
 });
 
 safeHandle('save-expense', (_, e) => {
@@ -471,65 +486,82 @@ safeHandle('save-expense', (_, e) => {
 });
 
 safeHandle('delete-expense', (_, id) => {
-  getDb().prepare('DELETE FROM expenses WHERE id=?').run(id);
+  getDb().prepare('UPDATE expenses SET is_deleted = 1 WHERE id=?').run(id);
   return true;
 });
 
 // ─── IPC: Purchases ───
 safeHandle('get-purchases', () => {
-  return getDb().prepare('SELECT * FROM purchases ORDER BY date DESC').all();
+  const rows = getDb().prepare('SELECT * FROM purchases WHERE is_deleted = 0 ORDER BY date DESC').all();
+  return rows.map(r => ({
+    ...r,
+    paymentBreakdown: r.payment_breakdown ? JSON.parse(r.payment_breakdown) : []
+  }));
 });
 
 safeHandle('save-purchase', (_, p) => {
-  const info = getDb().prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod);
+  const info = getDb().prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method, payment_breakdown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod, p.paymentBreakdown ? JSON.stringify(p.paymentBreakdown) : null);
   return { id: p.id || info.lastInsertRowid };
 });
 
 safeHandle('delete-purchase', (_, id) => {
-  getDb().prepare('DELETE FROM purchases WHERE id=?').run(id);
+  getDb().prepare('UPDATE purchases SET is_deleted = 1 WHERE id=?').run(id);
   return true;
 });
 
 // ─── IPC: Categories ───
 safeHandle('get-categories', () => {
-  return getDb().prepare('SELECT * FROM categories ORDER BY name').all();
+  return getDb().prepare('SELECT * FROM categories WHERE is_deleted = 0 ORDER BY name').all();
 });
 
 safeHandle('save-category', (_, cat) => {
+  const db = getDb();
   if (cat.id) {
-    getDb().prepare('UPDATE categories SET name=? WHERE id=?').run(cat.name, cat.id);
+    db.prepare('UPDATE categories SET name=?, is_deleted=0 WHERE id=?').run(cat.name, cat.id);
     return cat;
-  } else {
-    const info = getDb().prepare('INSERT INTO categories (name) VALUES (?)').run(cat.name);
-    return { ...cat, id: info.lastInsertRowid };
   }
+  // Check for existing including deleted
+  const existing = db.prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?)').get(cat.name.trim());
+  if (existing) {
+    db.prepare('UPDATE categories SET name=?, is_deleted=0 WHERE id=?').run(cat.name, existing.id);
+    return { ...cat, id: existing.id };
+  }
+  const info = db.prepare('INSERT INTO categories (name) VALUES (?)').run(cat.name);
+  return { ...cat, id: info.lastInsertRowid };
 });
 
 safeHandle('delete-category', (_, id) => {
-  getDb().prepare('DELETE FROM categories WHERE id=?').run(id);
+  getDb().prepare('UPDATE categories SET is_deleted = 1 WHERE id=?').run(id);
   return true;
 });
 
 // ─── IPC: Suppliers ───
 safeHandle('get-suppliers', () => {
-  return getDb().prepare('SELECT * FROM suppliers ORDER BY name').all();
+  return getDb().prepare('SELECT * FROM suppliers WHERE is_deleted = 0 ORDER BY name').all();
 });
 
 safeHandle('save-supplier', (_, s) => {
+  const db = getDb();
   if (s.id) {
-    getDb().prepare('UPDATE suppliers SET name=?, phone=?, email=?, address=? WHERE id=?')
+    db.prepare('UPDATE suppliers SET name=?, phone=?, email=?, address=?, is_deleted=0 WHERE id=?')
       .run(s.name, s.phone || null, s.email || null, s.address || null, s.id);
     return s;
-  } else {
-    const info = getDb().prepare('INSERT INTO suppliers (name, phone, email, address) VALUES (?, ?, ?, ?)')
-      .run(s.name, s.phone || null, s.email || null, s.address || null);
-    return { ...s, id: info.lastInsertRowid };
   }
+  // Check for existing including deleted
+  const existing = db.prepare('SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?)').get(s.name.trim());
+  if (existing) {
+    db.prepare('UPDATE suppliers SET phone=?, email=?, address?, is_deleted=0 WHERE id=?')
+      .run(s.phone || null, s.email || null, s.address || null, existing.id);
+    return { ...s, id: existing.id };
+  }
+  const info = db.prepare('INSERT INTO suppliers (name, phone, email, address) VALUES (?, ?, ?, ?)')
+    .run(s.name, s.phone || null, s.email || null, s.address || null);
+  return { ...s, id: info.lastInsertRowid };
 });
 
 safeHandle('delete-supplier', (_, id) => {
-  getDb().prepare('DELETE FROM suppliers WHERE id=?').run(id);
+  getDb().prepare('UPDATE suppliers SET is_deleted = 1 WHERE id=?').run(id);
   return true;
 });
 
@@ -539,8 +571,13 @@ safeHandle('add-supplier', (_, name) => {
 });
 
 // ─── IPC: Cloud Sync ───
-safeHandle('sync-to-cloud', async () => {
-  return await runFullSync(getDb());
+safeHandle('set-active-role', (_, role) => {
+  setActiveRole(role);
+  return true;
+});
+
+safeHandle('sync-to-cloud', async (_, role) => {
+  return await runFullSync(getDb(), role);
 });
 
 safeHandle('get-last-sync-time', () => {

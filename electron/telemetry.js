@@ -35,14 +35,24 @@ export const syncDeviceTelemetry = async () => {
       .single();
 
     if (remoteDevice && remoteDevice.force_action) {
-      if (remoteDevice.force_action === 'disable') {
+      const action = remoteDevice.force_action;
+      
+      // Critical: Clear the action in Supabase first to prevent loops
+      await supabase
+        .from('device_telemetry')
+        .update({ force_action: null })
+        .eq('machine_id', deviceId);
+
+      if (action === 'disable') {
         console.error("🚨 REMOTE KILL SWITCH ACTIVATED 🚨");
-        app.exit(0); // Instantly kill the POS
+        app.exit(0);
         return;
       }
-      if (remoteDevice.force_action === 'update') {
-         console.log("Force update requested remotely.");
-         // Future: trigger electron-updater
+      if (action === 'update') {
+         console.log("🚀 Remote Force Reboot requested.");
+         app.relaunch();
+         app.exit(0);
+         return;
       }
     }
 
@@ -75,8 +85,8 @@ export const startTelemetryLoop = () => {
   // Sync immediately on startup
   syncDeviceTelemetry();
   
-  // And sync every 15 minutes
-  setInterval(syncDeviceTelemetry, 15 * 60 * 1000);
+  // And sync every minute for responsive remote control
+  setInterval(syncDeviceTelemetry, 60 * 1000);
 };
 
 export const logDeveloperError = async (errorMessage) => {

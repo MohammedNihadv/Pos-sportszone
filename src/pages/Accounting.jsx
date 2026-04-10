@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Filter, Download, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Edit2, Trash2, Plus, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import DateRangePicker from '../components/DateRangePicker';
 
 // --- Accounting is now managed via SQLite ---
 
@@ -11,29 +12,29 @@ export default function Accounting() {
   const dm = darkMode;
   const [activeTab, setActiveTab] = useState('ledger');
   const [filter, setFilter] = useState('All');
-  const [timeRange, setTimeRange] = useState('This Year');
 
-  // Time Filtering Helper
-  const isInRange = (dateStr) => {
-    if (!dateStr) return false;
-    const date = new Date(dateStr);
-    const now = new Date();
+  // Advanced Date Range Filtering
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
-    if (timeRange === 'This Month') {
-      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    }
-    if (timeRange === 'Last Month') {
-      const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-      const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-      return date.getMonth() === lastMonth && date.getFullYear() === year;
-    }
-    if (timeRange === 'This Year') {
-      return date.getFullYear() === now.getFullYear();
-    }
-    return true; // "All" or fallback
+  // Robust path to "YYYY-MM-DD" matching the date picker
+  const toYMD = (d) => {
+    if (!d) return '';
+    const date = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  const filteredSales = (sales || []).filter(s => isInRange(s.created_at || s.date));
+  // Time Filtering Helper
+  const isInRange = (d) => {
+    if (!startDate && !endDate) return true;
+    const itemYMD = toYMD(d);
+    if (startDate && itemYMD < startDate) return false;
+    if (endDate && itemYMD > endDate) return false;
+    return true;
+  };
+
+  const filteredSales = (sales || []).filter(s => isInRange(s.date || s.created_at));
   const filteredPurchases = (purchases || []).filter(p => isInRange(p.date));
   const filteredExpenses = (expenses || []).filter(e => isInRange(e.date));
 
@@ -103,7 +104,7 @@ export default function Accounting() {
   const handleTxnDelete = () => alert('Cannot delete generic transaction. Go to the Sales or Expenses tab to revert.');
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
-  const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
+  const th = `px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider ${dm ? 'text-slate-500 bg-slate-900/50' : 'text-slate-400 bg-slate-50'}`;
   const tabs = ['ledger', 'transactions', 'p&l'];
 
   return (
@@ -114,15 +115,13 @@ export default function Accounting() {
           <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Ledger, transactions, and financial reports</p>
         </div>
         <div className="flex gap-2">
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className={`px-3 py-2 rounded-lg text-sm border outline-none ${dm ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-200 text-slate-700'}`}
-          >
-            <option>This Month</option>
-            <option>Last Month</option>
-            <option>This Year</option>
-          </select>
+          <DateRangePicker 
+            startDate={startDate} 
+            endDate={endDate} 
+            setStartDate={setStartDate} 
+            setEndDate={setEndDate} 
+            dm={dm} 
+          />
         </div>
       </div>
 

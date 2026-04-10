@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Trash2, TrendingDown, Edit2, X, Check } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Edit2, X, Check, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import DateRangePicker from '../components/DateRangePicker';
 
 // --- Expenses are now managed via SQLite ---
 
@@ -126,8 +127,32 @@ export default function Expenses() {
   const dm = darkMode;
   const [modal, setModal] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
+  const [search, setSearch] = useState('');
 
-  const filtered = expenses.filter(e => catFilter === 'All' || e.category === catFilter);
+  // Robust path to "YYYY-MM-DD" matching the date picker
+  const toYMD = (d) => {
+    if (!d) return '';
+    const date = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const filtered = useMemo(() => expenses.filter(e => {
+    const matchesCat = catFilter === 'All' || e.category === catFilter;
+    const matchesSearch = (e.description || '').toLowerCase().includes(search.toLowerCase()) || 
+                          (e.category || '').toLowerCase().includes(search.toLowerCase());
+    
+    const itemYMD = toYMD(e.date);
+    let matchesRange = true;
+    if (startDate && itemYMD < startDate) matchesRange = false;
+    if (endDate && itemYMD > endDate) matchesRange = false;
+    
+    return matchesCat && matchesSearch && matchesRange;
+  }), [expenses, catFilter, search, startDate, endDate]);
+
   const total = filtered.reduce((s, e) => s + e.amount, 0);
 
   const withBalance = useMemo(() => {
@@ -159,25 +184,37 @@ export default function Expenses() {
     addToast(`${category} expense removed`, 'info');
   };
 
-  const breakdown = categories.map(cat => ({
-    cat: cat.name, total: expenses.filter(e => e.category === cat.name).reduce((s, e) => s + e.amount, 0)
-  })).filter(b => b.total > 0).sort((a, b) => b.total - a.total);
+  const breakdown = useMemo(() => {
+    return categories.map(cat => ({
+      cat: cat.name, 
+      total: filtered.filter(e => e.category === cat.name).reduce((s, e) => s + e.amount, 0)
+    })).filter(b => b.total > 0).sort((a, b) => b.total - a.total);
+  }, [categories, filtered]);
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
   return (
     <div className="p-6 space-y-5">
-      <div className="flex justify-between items-end flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end flex-wrap gap-3">
         <div>
           <h2 className={`text-xl font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Daily Expenses</h2>
           <p className={`text-sm mt-0.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Track expenses — click ✏️ to fix any mistake</p>
         </div>
-        {!isOwner && (
-          <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
-            <Plus className="w-4 h-4" /> Add Expense
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <DateRangePicker 
+            startDate={startDate} 
+            endDate={endDate} 
+            setStartDate={setStartDate} 
+            setEndDate={setEndDate} 
+            dm={dm} 
+          />
+          {!isOwner && (
+            <button onClick={() => setModal('new')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600">
+              <Plus className="w-4 h-4" /> Add Expense
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

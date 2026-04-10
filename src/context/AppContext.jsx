@@ -44,16 +44,27 @@ const DEFAULT_PRODUCTS = [
   { id: 8, name: 'Shorts Training', sku: 'SH001', barcode: '1008', category: 'Shorts & Tracks', stock: 40, cost: 150, price: 350, emoji: '🩳' },
 ];
 
-const PRODUCT_ICONS = [
-  // Major Sports
-  '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🏒', '🏑', '🏏', '🎿', '🏂', '⛸', '🏹', '🎣', '🚣', '🏊', '🏇', '🚵', '🚴',
-  // Gear & Apparel
-  '👕', '🎽', '👟', '👞', '🥊', '🥋', '🛹', '⛷', '🤿', '🛼', '🪖', '🧢', '👖', '🩳', '🧤',
-  // Achievements & Other
-  '🏆', '🏅', '🥇', '🥈', '🥉', '⏱', '📣', '🚩',
-  // General fallback icons
-  '📦', '🏷️', '💎', '⚡', '📦'
+const PRODUCT_ICONS_CATEGORIZED = [
+  { 
+    category: 'Ball Sports', 
+    icons: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🏒', '🏑', '🏏'] 
+  },
+  { 
+    category: 'Gear & Apparel', 
+    icons: ['👕', '🎽', '👟', '👞', '🥊', '🥋', '🪖', '🧢', '👖', '🩳', '🧤', '🧦', '🎒', '⌚', '🕶️'] 
+  },
+  { 
+    category: 'Activities', 
+    icons: ['🎿', '🏂', '⛸️', '🏹', '🎣', '🚣', '🏊', '🏇', '🚵', '🚴', '🛹', '⛷️', '🤿', '🛼', '🏋️', '⛳', '🎯'] 
+  },
+  { 
+    category: 'Achievement & Other', 
+    icons: ['🏆', '🏅', '🥇', '🥈', '🥉', '⏱️', '📣', '🚩', '📦', '🏷️', '💎', '⚡', '🎮', '🎫', '💼', '🧴', '💊', '🧊', '🧵'] 
+  }
 ];
+
+// Flat list for compatibility with existing features
+const PRODUCT_ICONS = PRODUCT_ICONS_CATEGORIZED.reduce((acc, cat) => [...acc, ...cat.icons], []);
 
 export function AppProvider({ children }) {
   const api = typeof window !== 'undefined' ? window.api : null;
@@ -76,21 +87,36 @@ export function AppProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('sz_current_user')) || null; }
     catch { return null; }
   });
-  const [appSettings, setAppSettingsState] = useState({
-    businessName: 'Sports Zone',
-    businessGstin: '',
-    businessPhone: '',
-    businessEmail: '',
-    businessAddress: '',
-    cgstRate: 9,
-    sgstRate: 9,
-    printerType: 'Thermal (80mm)',
-    printerCopies: 1,
-    autoSync: true,
-    darkMode: false,
-    soundEnabled: true,
-    autoLockEnabled: true,
-    autoLockTimeout: 2
+  const isOwner = currentUser?.role === 'Owner';
+  const [appSettings, setAppSettingsState] = useState(() => {
+    // Initial sync from localStorage for immediate theme/sound feedback
+    const getStored = (key, fallback) => {
+      const v = localStorage.getItem(`sz_${key}`);
+      if (v === null) return fallback;
+      if (v === 'true') return true;
+      if (v === 'false') return false;
+      try { return JSON.parse(v); } catch { return v; }
+    };
+
+    return {
+      businessName: localStorage.getItem('sz_businessName') || 'Sports Zone',
+      businessGstin: localStorage.getItem('sz_businessGstin') || '',
+      businessPhone: localStorage.getItem('sz_businessPhone') || '',
+      businessEmail: localStorage.getItem('sz_businessEmail') || '',
+      businessAddress: localStorage.getItem('sz_businessAddress') || '',
+      cgstRate: Number(localStorage.getItem('sz_cgstRate')) || 9,
+      sgstRate: Number(localStorage.getItem('sz_sgstRate')) || 9,
+      printerType: localStorage.getItem('sz_printerType') || 'Thermal (80mm)',
+      printerCopies: Number(localStorage.getItem('sz_printerCopies')) || 1,
+      autoSync: getStored('autoSync', true),
+      darkMode: getStored('darkMode', false),
+      soundEnabled: getStored('soundEnabled', true),
+      autoLockEnabled: getStored('autoLockEnabled', true),
+      autoLockTimeout: Number(localStorage.getItem('sz_autoLockTimeout')) || 2,
+      cashBalance: Number(localStorage.getItem('sz_cashBalance')) || 0,
+      upiBalance: Number(localStorage.getItem('sz_upiBalance')) || 0,
+      bankBalance: Number(localStorage.getItem('sz_bankBalance')) || 0
+    };
   });
 
   const [credits, setCreditsState] = useState([]);
@@ -197,6 +223,25 @@ export function AppProvider({ children }) {
     loadData();
   }, [loadData]);
 
+  // Notify backend of role changes and set up periodic refresh for Owners
+  useEffect(() => {
+    if (api && currentUser) {
+      api.setActiveRole(currentUser.role);
+    }
+  }, [api, currentUser]);
+
+  useEffect(() => {
+    if (!api || !isOwner) return;
+
+    // Background refresh every 5 minutes for Owner
+    const interval = setInterval(() => {
+      console.log('Owner background data refresh triggered...');
+      loadData();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [api, isOwner, loadData]);
+
   const refreshProducts = useCallback(async () => {
     if (api) {
       const prod = await api.getProducts();
@@ -254,18 +299,12 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  const isOwner = currentUser?.role === 'Owner';
-
   // Derived sync status
   const currentSyncStatus = useMemo(() => {
     if (!isOnline) return 'offline';
     return syncStatus;
   }, [isOnline, syncStatus]);
 
-  const PRODUCT_ICONS = [
-    '👕','👟','🩳','🧢','🏐','⚽','🏀','🏏','🎾','🏅','🎒','⌚','🛡️','🏋️','📦','🏸','🏒','🏓','🥊','🥋',
-    '🏹','🎣','⛸️','🎿','🛹','🚴','🏊','🏇','⛳','🎯','🎮','🎫','🏷️','👞','💼','🧴','💊','🕶️','🧊','🧵'
-  ];
 
   const setLogo = useCallback((newLogo) => { setLogoState(newLogo); localStorage.setItem('sz_logo', newLogo); }, []);
   const updateAdminPin = useCallback(async (newPin) => { 
@@ -278,9 +317,20 @@ export function AppProvider({ children }) {
   const lockAdmin = useCallback(() => setIsAdminUnlocked(false), []);
 
   // Toggles setters (now just save to global settings)
-  const setSoundEnabled = useCallback((v) => saveAppSettings({ soundEnabled: v }), [saveAppSettings]);
-  const setAutoLockEnabled = useCallback((v) => saveAppSettings({ autoLockEnabled: v }), [saveAppSettings]);
-  const setAutoLockTimeout = useCallback((v) => saveAppSettings({ autoLockTimeout: v }), [saveAppSettings]);
+  const setSoundEnabled = useCallback((v) => {
+    const newVal = typeof v === 'function' ? v(appSettings.soundEnabled) : v;
+    saveAppSettings({ soundEnabled: newVal });
+  }, [saveAppSettings, appSettings.soundEnabled]);
+
+  const setAutoLockEnabled = useCallback((v) => {
+    const newVal = typeof v === 'function' ? v(appSettings.autoLockEnabled) : v;
+    saveAppSettings({ autoLockEnabled: newVal });
+  }, [saveAppSettings, appSettings.autoLockEnabled]);
+
+  const setAutoLockTimeout = useCallback((v) => {
+    const newVal = typeof v === 'function' ? v(appSettings.autoLockTimeout) : v;
+    saveAppSettings({ autoLockTimeout: newVal });
+  }, [saveAppSettings, appSettings.autoLockTimeout]);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now();
@@ -294,7 +344,12 @@ export function AppProvider({ children }) {
   const dismissToast = useCallback((id) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 
   const contextValue = useMemo(() => ({
-    darkMode, setDarkMode: (v) => saveAppSettings({ darkMode: v }), sidebarCollapsed, setSidebarCollapsed,
+    darkMode,
+    setDarkMode: (v) => {
+      const newVal = typeof v === 'function' ? v(appSettings.darkMode) : v;
+      saveAppSettings({ darkMode: newVal });
+    },
+    sidebarCollapsed, setSidebarCollapsed,
     toasts, addToast, dismissToast, syncStatus: currentSyncStatus, setSyncStatus,
     logo, setLogo, isAdminUnlocked, setIsAdminUnlocked, lockAdmin,
     adminPin, updateAdminPin,
@@ -306,7 +361,8 @@ export function AppProvider({ children }) {
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits: setCreditsState, customers, setCustomers,
     appSettings, saveAppSettings, isOwner, isOnline, lastSync, setLastSync,
-    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS,
+    PRODUCT_ICONS_CATEGORIZED
   }), [
     darkMode, sidebarCollapsed, toasts, currentSyncStatus, logo,
     isAdminUnlocked, adminPin, users, currentUser, isLocked,
@@ -316,7 +372,8 @@ export function AppProvider({ children }) {
     appSettings, saveAppSettings, isOwner, isOnline, lastSync,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
-    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS,
+    PRODUCT_ICONS_CATEGORIZED
   ]);
 
   return (

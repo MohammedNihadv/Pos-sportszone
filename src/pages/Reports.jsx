@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { RefreshCw, Box, Activity, TrendingUp, Percent } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import DateRangePicker from '../components/DateRangePicker';
 
 export default function Reports() {
   const { darkMode, sales: s, purchases: p } = useApp();
@@ -11,47 +12,84 @@ export default function Reports() {
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
 
+  // Robust path to "YYYY-MM-DD" matching the date picker
+  const toYMD = (d) => {
+    if (!d) return '';
+    const date = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  // Advanced Date Range Filtering
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   // Use memoization for heavy stats calculation
   const stats = useMemo(() => {
     if (!s || !p) return null;
 
-    // Calculate last 6 months data structure
+    // Filter raw data based on selected range
+    const filteredSales = s.filter(sale => {
+      if (!startDate && !endDate) return true; 
+      const saleYMD = toYMD(sale.date || sale.created_at);
+      if (startDate && saleYMD < startDate) return false;
+      if (endDate && saleYMD > endDate) return false;
+      return true;
+    });
+
+    const filteredPurchases = p.filter(pur => {
+      if (!startDate && !endDate) return true;
+      const purYMD = toYMD(pur.date);
+      if (startDate && purYMD < startDate) return false;
+      if (endDate && purYMD > endDate) return false;
+      return true;
+    });
+
+    // Determine months to show in chart
     const months = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-      months[key] = { 
-        month: d.toLocaleString('en-US', { month: 'short' }), 
-        key, 
-        purchase: 0, 
-        sales: 0, 
-        profit: 0 
-      };
+    if (!startDate && !endDate) {
+      // Default: Last 6 months
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        months[key] = { month: d.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0 };
+      }
+    } else {
+      // Dynamic range: Get all months between start and end
+      const start = startDate ? new Date(startDate) : new Date(Math.min(...filteredSales.map(s => new Date(s.date || s.created_at))));
+      const end = endDate ? new Date(endDate) : new Date();
+      
+      let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+      const limit = new Date(end.getFullYear(), end.getMonth(), 1);
+      
+      while (curr <= limit) {
+        const key = curr.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        months[key] = { month: curr.toLocaleString('en-US', { month: 'short' }), key, purchase: 0, sales: 0, profit: 0 };
+        curr.setMonth(curr.getMonth() + 1);
+        if (Object.keys(months).length > 24) break; // Safety cap
+      }
     }
 
     let totalCash = 0; 
     let totalUpi = 0;
     const itemStats = {};
 
-    // Single pass through sales for multiple metrics
-    s.forEach(sale => {
+    // Single pass through filtered sales
+    filteredSales.forEach(sale => {
       const d = new Date(sale.date || sale.created_at || new Date());
       const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
       
-      // Monthly aggregate
       if (months[key]) {
         months[key].sales += sale.total;
         const cost = (sale.items || []).reduce((sum, item) => sum + (item.cost || 0) * item.qty, 0);
         months[key].profit += (sale.total - cost);
       }
       
-      // Payment grouping
       const pm = (sale.paymentMethod || sale.payment_method || '').toLowerCase();
       if (pm === 'cash') totalCash += sale.total;
       else if (pm.includes('upi') || pm.includes('bank') || pm.includes('card')) totalUpi += sale.total;
 
-      // Item popularity
       (sale.items || []).forEach(item => {
         if (!itemStats[item.name]) itemStats[item.name] = { name: item.name, qty: 0, revenue: 0, cost: 0 };
         itemStats[item.name].qty += item.qty;
@@ -60,8 +98,7 @@ export default function Reports() {
       });
     });
 
-    // Pass through purchases
-    p.forEach(purchase => {
+    filteredPurchases.forEach(purchase => {
       const d = new Date(purchase.date || new Date());
       const key = d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
       if (months[key]) {
@@ -69,7 +106,6 @@ export default function Reports() {
       }
     });
 
-    // Finalize top items
     const topItems = Object.values(itemStats)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5)
@@ -79,8 +115,8 @@ export default function Reports() {
       });
 
     const monthlyArray = Object.values(months);
-    const totalSalesAll = monthlyArray.reduce((acc, curr) => acc + curr.sales, 0);
-    const totalPurchaseAll = monthlyArray.reduce((acc, curr) => acc + curr.purchase, 0);
+    const totalSalesAll = filteredSales.reduce((acc, curr) => acc + curr.total, 0);
+    const totalPurchaseAll = filteredPurchases.reduce((acc, curr) => acc + curr.total, 0);
     const totalProfitAll = monthlyArray.reduce((acc, curr) => acc + curr.profit, 0);
     const avgMargin = totalSalesAll > 0 ? ((totalProfitAll / totalSalesAll) * 100).toFixed(1) + '%' : '0%';
 
@@ -93,7 +129,7 @@ export default function Reports() {
       totalProfitAll,
       avgMargin
     };
-  }, [s, p]);
+  }, [s, p, startDate, endDate]);
 
   const loading = !stats;
 
@@ -117,9 +153,13 @@ export default function Reports() {
           <p className={`text-sm mt-1.5 font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Real-time business performance & financial insights</p>
         </div>
         <div className="flex items-center gap-2">
-           <select className={`px-4 py-2.5 rounded-xl text-sm border font-bold outline-none transition-all cursor-pointer ${dm ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-700 focus:border-blue-400 focus:shadow-md'}`}>
-            <option>Last 6 Months</option><option>This Year</option><option>Custom Range</option>
-          </select>
+           <DateRangePicker 
+             startDate={startDate} 
+             endDate={endDate} 
+             setStartDate={setStartDate} 
+             setEndDate={setEndDate} 
+             dm={dm} 
+           />
         </div>
       </div>
 

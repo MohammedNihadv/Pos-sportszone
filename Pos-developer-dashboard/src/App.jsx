@@ -167,6 +167,7 @@ function App() {
               {[
                 { id: 'telemetry', label: 'Monitor', icon: Activity },
                 { id: 'logs', label: 'Audit', icon: History },
+                { id: 'errors', label: 'Terminal', icon: Terminal },
                 { id: 'users', label: 'Staffing', icon: Users },
               ].map(tab => (
                 <button
@@ -267,7 +268,7 @@ function App() {
                       <p className="text-3xl font-bold mb-2">{errors.length}</p>
                       <p className="text-xs text-slate-400 font-medium leading-relaxed">System crashes or renderer failure reports across the whole network.</p>
                       <button 
-                        onClick={() => setActiveTab('logs')}
+                        onClick={() => setActiveTab('errors')}
                         className="mt-8 text-[11px] font-bold py-3 px-6 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors shadow-lg active:scale-95"
                       >
                         Inspect Error Stack
@@ -409,7 +410,6 @@ function App() {
             </div>
           </div>
         )}
-
         {/* --- AUDIT TAB --- */}
         {activeTab === 'logs' && (
           <div className="animate-fade-in space-y-6">
@@ -457,7 +457,7 @@ function App() {
                          </td>
                          <td className="px-8 py-5">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider
-                              ${l.user_role === 'Owner' ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
+                               ${l.user_role === 'Owner' ? 'text-amber-600 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>
                                {l.user_role}
                             </span>
                          </td>
@@ -472,6 +472,75 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* --- SYSTEM ERRORS TAB --- */}
+        {activeTab === 'errors' && (
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden min-h-[600px] flex flex-col">
+                <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-10 shadow-sm">
+                   <div>
+                     <h3 className="text-lg font-bold text-slate-900 tracking-tight underline decoration-red-500 decoration-2 underline-offset-4">System Error Terminal</h3>
+                     <p className="text-xs text-slate-500 mt-1 font-medium italic opacity-70">Real-time crash reports and stack traces</p>
+                   </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={async () => {
+                        if (window.confirm("Are you sure you want to wipe all system error logs?")) {
+                          await supabase.from('developer_logs').delete().neq('id', 0);
+                          fetchTelemetry();
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Purge Terminal Logs
+                    </button>
+                  </div>
+               </div>
+               
+               <div className="flex-1 overflow-x-auto">
+                 <table className="w-full text-left text-sm">
+                   <thead className="bg-slate-50/30 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                     <tr>
+                       <th className="px-8 py-4">Occurred At</th>
+                       <th className="px-8 py-4">Target Device</th>
+                       <th className="px-8 py-4">FW Ver</th>
+                       <th className="px-8 py-4">Error Context / Stack Trace</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-50">
+                     {errors.map(err => (
+                       <tr key={err.id} onClick={() => setSelectedError(err)} className="hover:bg-red-50/30 group cursor-pointer">
+                         <td className="px-8 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                            {new Date(err.occurred_at).toLocaleString()}
+                         </td>
+                         <td className="px-8 py-5">
+                            <span className="text-xs font-mono font-bold text-slate-600">
+                               {err.device_id?.substring(0,8)}
+                            </span>
+                         </td>
+                         <td className="px-8 py-5">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold">
+                               {err.app_version}
+                            </span>
+                         </td>
+                         <td className="px-8 py-5 text-xs text-red-600 font-mono max-w-lg">
+                            <div className="line-clamp-2">{err.error_message}</div>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+                 {errors.length === 0 && (
+                   <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+                      <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4 opacity-20" />
+                      <p className="font-bold uppercase tracking-widest text-xs">No active terminal errors</p>
+                   </div>
+                 )}
+               </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* DEVICE MODAL REDESIGN */}

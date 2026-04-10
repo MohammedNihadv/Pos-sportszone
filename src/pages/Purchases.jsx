@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import PaymentBreakdown from '../components/PaymentBreakdown';
 
 // --- Purchases are now managed via SQLite ---
 
@@ -10,8 +11,19 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
   const [form, setForm] = useState(purchase || {
     date: new Date().toISOString().split('T')[0], supplier: suppliers[0]?.name || '',
     invoice: '', items: '', total: '', paid: '', status: 'pending',
-    paymentMethod: 'Cash'
+    paymentMethod: 'Cash',
+    paymentBreakdown: [{ method: 'Cash', amount: '' }]
   });
+
+  // If editing an existing purchase that doesn't have a breakdown yet
+  useEffect(() => {
+    if (purchase && !purchase.paymentBreakdown) {
+      setForm(prev => ({
+        ...prev,
+        paymentBreakdown: [{ method: purchase.paymentMethod || 'Cash', amount: purchase.paid || 0 }]
+      }));
+    }
+  }, [purchase]);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -44,19 +56,25 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
     addToast(`Supplier ${newSup.name} added`, 'success');
   };
 
-  const balance = Math.max(0, parseFloat(form.total || 0) - parseFloat(form.paid || 0));
+  const totalPaid = (form.paymentBreakdown || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const balance = Math.max(0, parseFloat(form.total || 0) - totalPaid);
 
   const handleSave = () => {
     if (!form.supplier) return addToast('Please select a supplier', 'error');
     if (!form.total) return addToast('Please enter a total amount', 'error');
+    const finalPaid = (form.paymentBreakdown || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const finalMethod = (form.paymentBreakdown || []).length > 1 ? 'Split' : (form.paymentBreakdown?.[0]?.method || 'Cash');
+    
     onSave({
       ...form,
       id: purchase?.id || `PO-${Date.now()}`,
       total: parseFloat(form.total),
-      paid: parseFloat(form.paid || 0),
+      paid: finalPaid,
       balance,
       items: parseInt(form.items || 0),
       status: balance === 0 ? 'paid' : balance < parseFloat(form.total) ? 'partial' : 'pending',
+      paymentMethod: finalMethod,
+      paymentBreakdown: form.paymentBreakdown
     });
     onClose();
   };
@@ -100,17 +118,16 @@ function PurchaseModal({ purchase, onClose, onSave, dm, suppliers, setSuppliers,
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Total Amount (₹)</label><input type="number" className={inputCls} value={form.total} onChange={e => setForm(p => ({...p, total: e.target.value}))} /></div>
-            <div><label className={labelCls}>Amount Paid (₹)</label><input type="number" className={inputCls} value={form.paid} onChange={e => setForm(p => ({...p, paid: e.target.value}))} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>No. of Items</label><input type="number" className={inputCls} value={form.items} onChange={e => setForm(p => ({...p, items: e.target.value}))} /></div>
-            <div><label className={labelCls}>Payment Via</label>
-              <select className={inputCls} value={form.paymentMethod} onChange={e => setForm(p => ({...p, paymentMethod: e.target.value}))}>
-                <option>Cash</option>
-                <option>UPI</option>
-                <option>Shop GPay</option>
-              </select>
-            </div>
+          </div>
+
+          <div className="col-span-2 py-2">
+            <PaymentBreakdown 
+              payments={form.paymentBreakdown} 
+              onChange={(newPayments) => setForm(p => ({ ...p, paymentBreakdown: newPayments }))}
+              dm={dm}
+              totalAmount={form.total}
+            />
           </div>
           {form.total && (
             <div className={`rounded-xl p-3 text-center ${balance === 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-amber-900/30' : 'bg-amber-50')}`}>

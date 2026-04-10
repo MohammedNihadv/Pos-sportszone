@@ -219,6 +219,15 @@ function AppContent() {
     };
   }, []);
 
+  // Global theme syncing
+  useEffect(() => {
+    if (dm) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [dm]);
+
   // Global error handlers → log to backend
   useEffect(() => {
     const handleError = (event) => {

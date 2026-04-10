@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, X, Building2, CreditCard, AlertCircle, FileText } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Plus, Edit2, Trash2, X, Building2, CreditCard, AlertCircle, FileText, ChevronRight, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import PaymentBreakdown from '../components/PaymentBreakdown';
+import DateRangePicker from '../components/DateRangePicker';
 
 // Ensure we extract unique suppliers from both the supplier list and existing purchases
 function getUniqueSuppliers(suppliers, purchases) {
@@ -21,7 +23,18 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList, setSuppliers, a
     debit: '', 
     credit: '', 
     note: '',
-    paymentMethod: 'Cash'
+    paymentMethod: 'Cash',
+    paymentBreakdown: [{ method: 'Cash', amount: '' }]
+  });
+
+  // Effect to sync existing payments if any
+  useState(() => {
+    if (entry && !entry.paymentBreakdown) {
+      setForm(prev => ({
+        ...prev,
+        paymentBreakdown: [{ method: entry.paymentMethod || 'Cash', amount: entry.credit || 0 }]
+      }));
+    }
   });
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
@@ -54,11 +67,16 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList, setSuppliers, a
   };
 
   const handleSave = () => {
+    const totalPaid = (form.paymentBreakdown || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const finalMethod = (form.paymentBreakdown || []).length > 1 ? 'Split' : (form.paymentBreakdown?.[0]?.method || 'Cash');
+
     onSave({
       ...form,
       id: entry?.id || `PO-${Date.now()}`,
       debit: form.debit ? parseFloat(form.debit) : 0,
-      credit: form.credit ? parseFloat(form.credit) : 0,
+      credit: totalPaid,
+      paymentMethod: finalMethod,
+      paymentBreakdown: form.paymentBreakdown
     });
     onClose();
   };
@@ -101,21 +119,20 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList, setSuppliers, a
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Debit (₹ Purchased)</label><input type="number" className={inputCls} value={form.debit || ''} onChange={e => setForm(p => ({...p, debit: e.target.value}))} placeholder="0" /></div>
-            <div><label className={labelCls}>Credit (₹ Paid/Returned)</label><input type="number" className={inputCls} value={form.credit || ''} onChange={e => setForm(p => ({...p, credit: e.target.value}))} placeholder="0" /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Payment Method</label>
-              <select className={inputCls} value={form.paymentMethod || 'Cash'} onChange={e => setForm(p => ({...p, paymentMethod: e.target.value}))}>
-                <option>Cash</option>
-                <option>UPI</option>
-              </select>
-            </div>
+            <div><label className={labelCls}>Total Purchase (Debit)</label><input type="number" className={inputCls} value={form.debit || ''} onChange={e => setForm(p => ({...p, debit: e.target.value}))} placeholder="0" /></div>
             <div>
               <label className={labelCls}>Note</label>
               <input className={inputCls} value={form.note} onChange={e => setForm(p => ({...p, note: e.target.value}))} placeholder="Payment, Return, etc." />
             </div>
+          </div>
+          
+          <div className="pt-2">
+            <PaymentBreakdown 
+              payments={form.paymentBreakdown}
+              onChange={(newPayments) => setForm(p => ({ ...p, paymentBreakdown: newPayments }))}
+              dm={dm}
+              totalAmount={form.debit}
+            />
           </div>
         </div>
         <div className="flex gap-3 px-5 pb-5">
@@ -137,7 +154,8 @@ export default function PurchaseLedger() {
   const [openingEdit, setOpeningEdit] = useState(false);
   const [modal, setModal] = useState(null); // null | 'new' | entry object
   const [supplierFilter, setSupplierFilter] = useState('All');
-  const [dateFilter, setDateFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const supplierList = useMemo(() => getUniqueSuppliers(suppliers, purchases), [suppliers, purchases]);
 
@@ -162,9 +180,16 @@ export default function PurchaseLedger() {
 
   const filtered = useMemo(() => entries.filter(e => {
     const matchesSupplier = supplierFilter === 'All' || e.supplier === supplierFilter;
-    const matchesDate = !dateFilter || e.date === dateFilter;
-    return matchesSupplier && matchesDate;
-  }), [entries, supplierFilter, dateFilter]);
+    
+    let matchesRange = true;
+    if (startDate || endDate) {
+      const entryDateYMD = e.date; // e.date is already YYYY-MM-DD
+      if (startDate && entryDateYMD < startDate) matchesRange = false;
+      if (endDate && entryDateYMD > endDate) matchesRange = false;
+    }
+
+    return matchesSupplier && matchesRange;
+  }), [entries, supplierFilter, startDate, endDate]);
 
   const withBalance = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => a.rawDate - b.rawDate);
@@ -192,6 +217,7 @@ export default function PurchaseLedger() {
       total: entry.debit || 0,
       paid: entry.credit || 0,
       paymentMethod: entry.paymentMethod || 'Cash',
+      paymentBreakdown: entry.paymentBreakdown || [],
       status: entry.note || ((entry.debit || 0) === (entry.credit || 0) ? 'paid' : 'pending'),
     };
 
@@ -280,32 +306,33 @@ export default function PurchaseLedger() {
 
       {/* Supplier Filter & Ledger */}
       <div className={`${card} overflow-hidden`}>
-        <div className={`flex flex-col sm:flex-row items-center justify-between p-4 border-b ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
-          <div className="flex items-center gap-2 flex-grow">
-            <div className={`p-1.5 rounded-lg ${dm ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-              <FileText className="w-4 h-4" />
+        <div className={`p-0 border-b ${dm ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
+          {/* Row 1: Title and Date Range */}
+          <div className="flex items-center justify-between p-4 border-b border-inherit">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className={`p-1.5 rounded-lg ${dm ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                <FileText className="w-4 h-4" />
+              </div>
+              <h3 className={`font-bold text-xs uppercase tracking-widest ${dm ? 'text-slate-300' : 'text-slate-500'}`}>Transaction Ledger</h3>
             </div>
-            <h3 className={`font-bold text-xs uppercase tracking-widest ${dm ? 'text-slate-300' : 'text-slate-500'}`}>Transaction Ledger</h3>
-          </div>
-          <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 items-center mt-2 sm:mt-0">
-            <div className={`relative flex items-center px-3 py-1.5 rounded-xl border transition-all ${dm ? 'bg-slate-800 border-slate-700 focus-within:border-blue-500' : 'bg-white border-slate-200 focus-within:border-blue-500'}`}>
-              <input 
-                type="date" 
-                value={dateFilter} 
-                onChange={e => setDateFilter(e.target.value)}
-                className={`text-xs outline-none bg-transparent ${dm ? 'text-white' : 'text-slate-700'}`} 
+            
+            <div className="shrink-0 scale-90 origin-right">
+              <DateRangePicker 
+                startDate={startDate} 
+                endDate={endDate} 
+                setStartDate={setStartDate} 
+                setEndDate={setEndDate} 
+                dm={dm} 
               />
             </div>
-            {dateFilter && (
-              <button onClick={() => setDateFilter('')} className="p-1 px-2 text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
-                <X className="w-3.5 h-3.5" /> Clear
-              </button>
-            )}
-            <div className={`h-4 w-[1px] mx-2 ${dm ? 'bg-slate-700' : 'bg-slate-200'}`} />
-            <div className="flex gap-2 shrink-0">
+          </div>
+
+          {/* Row 2: Supplier Filters */}
+          <div className="px-4 py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-2">
               {['All', ...supplierList].map(s => (
                 <button key={s} onClick={() => setSupplierFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${supplierFilter === s ? 'bg-slate-800 text-white dark:bg-blue-600 shadow-sm' : (dm ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-600 bg-white border border-slate-200 hover:bg-slate-100')}`}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${supplierFilter === s ? 'bg-blue-600 text-white shadow-md' : (dm ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-600 bg-white border border-slate-200 hover:bg-slate-100')}`}
                 >{s}</button>
               ))}
             </div>

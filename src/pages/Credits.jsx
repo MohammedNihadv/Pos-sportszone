@@ -3,52 +3,59 @@ import { Clock, CheckCircle, Trash2, AlertCircle, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Credits() {
-  const { darkMode, addToast, isOwner } = useApp();
+  const { darkMode, addToast, isOwner, credits, refreshCredits } = useApp();
   const dm = darkMode;
 
-  const [credits, setCredits] = useState([]);
-  const [settleModal, setSettleModal] = useState(null); // { credit, amount }
+  const [settleModal, setSettleModal] = useState(null); // { id, customer_name, total, paid, pending, items }
   const [settleAmount, setSettleAmount] = useState('');
   const [settleMethod, setSettleMethod] = useState('cash');
 
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('sz_credits') || '[]');
-      setCredits(stored);
-    } catch { setCredits([]); }
-  }, []);
-
-  const save = (updated) => {
-    setCredits(updated);
-    localStorage.setItem('sz_credits', JSON.stringify(updated));
-  };
-
-  const handleSettle = () => {
+  const handleSettle = async () => {
     const amount = parseFloat(settleAmount) || 0;
     if (!amount || amount <= 0) return addToast('Enter a valid amount', 'error');
+    if (!window.api) return addToast('Database connection missing', 'error');
 
-    const updated = credits.map(c => {
-      if (c.id !== settleModal.id) return c;
-      const newPaid = (c.paid || 0) + amount;
-      const newPending = Math.max(0, c.total - newPaid);
-      const newNote = (c.items || '') + ` (Paid ₹${amount} via ${settleMethod.toUpperCase()})`;
-      return { ...c, paid: newPaid, pending: newPending, items: newNote };
-    }).filter(c => c.pending > 0); 
+    const newPaid = (settleModal.paid || 0) + amount;
+    const newPending = Math.max(0, settleModal.total - newPaid);
+    const newNote = (settleModal.items || '') + ` (Paid ₹${amount} via ${settleMethod.toUpperCase()} on ${new Date().toLocaleDateString()})`;
 
-    save(updated);
-    addToast(`₹${amount} settled for ${settleModal.customer} via ${settleMethod.toUpperCase()}`, 'success');
-    setSettleModal(null);
-    setSettleAmount('');
+    try {
+      if (newPending === 0) {
+        // Fully settled, delete the credit record
+        await window.api.deleteCredit(settleModal.id);
+        addToast(`Bill fully settled for ${settleModal.customer_name}!`, 'success');
+      } else {
+        // Partial settlement, update record
+        await window.api.saveCredit({
+          ...settleModal,
+          paid: newPaid,
+          pending: newPending,
+          items: newNote
+        });
+        addToast(`₹${amount} received from ${settleModal.customer_name}. Remaining: ₹${newPending.toLocaleString()}`, 'success');
+      }
+      
+      await refreshCredits();
+      setSettleModal(null);
+      setSettleAmount('');
+    } catch (err) {
+      addToast('Failed to update credit: ' + err.message, 'error');
+    }
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Remove this credit entry?')) return;
-    save(credits.filter(c => c.id !== id));
-    addToast('Credit entry removed', 'info');
+  const handleDelete = async (id) => {
+    if (!window.confirm('Remove this credit entry? This should only be done for errors.')) return;
+    if (!window.api) return;
+    try {
+      await window.api.deleteCredit(id);
+      await refreshCredits();
+      addToast('Credit entry removed', 'info');
+    } catch (err) {
+      addToast('Delete failed: ' + err.message, 'error');
+    }
   };
 
-  const totalPending = credits.reduce((s, c) => s + (c.pending || 0), 0);
-
+  const totalPending = (credits || []).reduce((s, c) => s + (c.pending || 0), 0);
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
   return (
@@ -66,7 +73,7 @@ export default function Credits() {
         )}
       </div>
 
-      {credits.length === 0 ? (
+      {(!credits || credits.length === 0) ? (
         <div className={`${card} p-12 text-center`}>
           <CheckCircle className="w-12 h-12 mx-auto mb-3 text-emerald-400 opacity-50" />
           <p className={`font-semibold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>No pending credits!</p>
@@ -78,7 +85,7 @@ export default function Credits() {
             <div key={c.id} className={`${card} p-5 space-y-3`}>
               <div className="flex justify-between items-start">
                 <div>
-                  <p className={`font-bold text-base ${dm ? 'text-white' : 'text-slate-800'}`}>{c.customer}</p>
+                  <p className={`font-bold text-base ${dm ? 'text-white' : 'text-slate-800'}`}>{c.customer_name}</p>
                   <p className={`text-xs mt-0.5 ${dm ? 'text-slate-500' : 'text-slate-400'}`}>{c.date}</p>
                 </div>
                 {!isOwner && (
@@ -124,7 +131,7 @@ export default function Credits() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onMouseDown={e => { if (e.target === e.currentTarget) setSettleModal(null); }}>
           <div onMouseDown={e => e.stopPropagation()} className={`w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden ${dm ? 'bg-slate-900' : 'bg-white'}`}>
             <div className={`flex items-center justify-between px-5 py-4 border-b ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
-              <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Record Payment — {settleModal.customer}</h3>
+              <h3 className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>Record Payment — {settleModal.customer_name}</h3>
               <button onClick={() => setSettleModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-5 space-y-4">
