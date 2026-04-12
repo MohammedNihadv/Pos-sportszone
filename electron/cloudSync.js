@@ -32,8 +32,8 @@ async function syncSales(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     date: r.date,
     total: r.total,
     discount: r.discount || 0,
@@ -61,8 +61,8 @@ async function syncExpenses(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     date: r.date,
     category: r.category,
     description: r.description || '',
@@ -85,8 +85,8 @@ async function syncProducts(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     name: r.name,
     sku: r.sku || '',
     barcode: r.barcode || '',
@@ -112,8 +112,8 @@ async function syncSuppliers(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     name: r.name,
     phone: r.phone || '',
     email: r.email || '',
@@ -135,7 +135,8 @@ async function syncCategories(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     name: r.name,
     is_deleted: r.is_deleted || 0
   }));
@@ -154,8 +155,8 @@ async function syncPurchases(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     date: r.date,
     supplier: r.supplier,
     invoice: r.invoice || '',
@@ -182,8 +183,8 @@ async function syncUsers(db) {
 
   const payload = rows.map(r => ({
     local_id: r.id,
-    machine_id: getDeviceId(),
-    hostname: getHostname(),
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
     name: r.name,
     role: r.role,
     pin: r.pin, // Only PIN for recovery as requested
@@ -213,13 +214,13 @@ export async function runFullSync(db, role = 'Staff') {
       .and(`machine_id.is.null,machine_id.eq.${getDeviceId()}`)
       .limit(1)
       .single();
-    
+
     if (cmd && !cmdErr) {
       logInfo('CloudSync:RemoteCommand', 'Received CLEAR_LOGS command from cloud');
       db.prepare('DELETE FROM audit_logs').run();
       await supabase.from('cloud_commands').update({ status: 'executed' }).eq('id', cmd.id);
     }
-  } catch (e) {
+  } catch {
     // Ignore if table doesn't exist yet or other syncing issues
   }
 
@@ -232,70 +233,79 @@ export async function runFullSync(db, role = 'Staff') {
     { name: 'categories', fn: syncCategories },
     { name: 'purchases', fn: syncPurchases },
     { name: 'users', fn: syncUsers },
-// ...
-    { name: 'customers', fn: async (db) => {
-      const rows = db.prepare('SELECT * FROM customers ORDER BY id').all();
-      if (rows.length === 0) return { table: 'customers', synced: 0 };
-      const payload = rows.map(r => ({ 
-        local_id: r.id, 
-        machine_id: getDeviceId(),
-        hostname: getHostname(),
-        name: r.name, phone: r.phone, email: r.email, orders: r.orders, total: r.total, last_order: r.last_order,
-        is_deleted: r.is_deleted || 0
-      }));
-      const { error } = await supabase.from('cloud_customers').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
-      if (error) throw error;
-      return { table: 'customers', synced: rows.length };
-    }},
-    { name: 'credits', fn: async (db) => {
-      const rows = db.prepare('SELECT * FROM credits ORDER BY id').all();
-      if (rows.length === 0) return { table: 'credits', synced: 0 };
-      const payload = rows.map(r => ({ 
-        local_id: r.id, 
-        machine_id: getDeviceId(),
-        hostname: getHostname(),
-        customer_id: r.customer_id, customer_name: r.customer_name, total: r.total, paid: r.paid, pending: r.pending, date: r.date, items: r.items,
-        is_deleted: r.is_deleted || 0
-      }));
-      const { error } = await supabase.from('cloud_credits').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
-      if (error) throw error;
-      return { table: 'credits', synced: rows.length };
-    }},
-    { name: 'audit_logs', fn: async (db) => {
-      const rows = db.prepare('SELECT * FROM audit_logs ORDER BY id').all();
-      if (rows.length === 0) return { table: 'audit_logs', synced: 0 };
-      const payload = rows.map(r => ({ 
-        local_id: r.id, 
-        machine_id: getDeviceId(),
-        hostname: getHostname(),
-        user_role: r.user_role, action: r.action, details: r.details, timestamp: r.timestamp 
-      }));
-      const { error } = await supabase.from('cloud_audit_logs').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
-      if (error) throw error;
-      return { table: 'audit_logs', synced: rows.length };
-    }}
+    // ...
+    {
+      name: 'customers', fn: async (db) => {
+        const rows = db.prepare('SELECT * FROM customers ORDER BY id').all();
+        if (rows.length === 0) return { table: 'customers', synced: 0 };
+        const payload = rows.map(r => ({
+          local_id: r.id,
+          machine_id: r.machine_id || getDeviceId(),
+          hostname: r.hostname || getHostname(),
+          name: r.name, phone: r.phone, email: r.email, orders: r.orders, total: r.total, last_order: r.last_order,
+          is_deleted: r.is_deleted || 0
+        }));
+        const { error } = await supabase.from('cloud_customers').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
+        if (error) throw error;
+        return { table: 'customers', synced: rows.length };
+      }
+    },
+    {
+      name: 'credits', fn: async (db) => {
+        const rows = db.prepare('SELECT * FROM credits ORDER BY id').all();
+        if (rows.length === 0) return { table: 'credits', synced: 0 };
+        const payload = rows.map(r => ({
+          local_id: r.id,
+          machine_id: r.machine_id || getDeviceId(),
+          hostname: r.hostname || getHostname(),
+          customer_id: r.customer_id, customer_name: r.customer_name, total: r.total, paid: r.paid, pending: r.pending, date: r.date, items: r.items,
+          is_deleted: r.is_deleted || 0
+        }));
+        const { error } = await supabase.from('cloud_credits').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
+        if (error) throw error;
+        return { table: 'credits', synced: rows.length };
+      }
+    },
+    {
+      name: 'audit_logs', fn: async (db) => {
+        const rows = db.prepare('SELECT * FROM audit_logs ORDER BY id').all();
+        if (rows.length === 0) return { table: 'audit_logs', synced: 0 };
+        const payload = rows.map(r => ({
+          local_id: r.id,
+          machine_id: r.machine_id || getDeviceId(),
+          hostname: r.hostname || getHostname(),
+          user_role: r.user_role, action: r.action, details: r.details, timestamp: r.timestamp
+        }));
+        const { error } = await supabase.from('cloud_audit_logs').upsert(payload, { onConflict: ['machine_id', 'local_id'] });
+        if (error) throw error;
+        return { table: 'audit_logs', synced: rows.length };
+      }
+    }
   ];
 
 
-  for (const task of syncTasks) {
-    try {
-      const res = await task.fn(db);
-      results.synced[task.name] = res.synced;
-    } catch (err) {
-      results.errors.push(`${task.name}: ${err.message}`);
-      logError(`CloudSync:${task.name}`, err);
-    }
+  // 1. Pull from cloud (Always do this first)
+  // This ensures local dummy data is overwritten by real cloud data before we push anything.
+  try {
+    logInfo('CloudSync:PullPhase', `Refreshing local data from cloud for ${role}...`);
+    const pullRes = await pullFromCloud(db);
+    results.pulled = pullRes.pulled;
+    if (!pullRes.success) results.errors.push(...pullRes.errors);
+  } catch (err) {
+    logError('CloudSync:PullPhase', err);
   }
 
-  // 2. Pull if Owner (Multi-Device Refresh)
-  if (role === 'Owner') {
-    try {
-      logInfo('CloudSync:OwnerPull', 'Starting background cloud pull for Owner');
-      const pullRes = await pullFromCloud(db);
-      results.pulled = pullRes.pulled;
-      if (!pullRes.success) results.errors.push(...pullRes.errors);
-    } catch (err) {
-      logError('CloudSync:OwnerPull', err);
+  // 2. Push to cloud (Only if NOT Owner)
+  // Owners are pure viewers and should never push local state/dummy data
+  if (role !== 'Owner') {
+    for (const task of syncTasks) {
+      try {
+        const res = await task.fn(db);
+        results.synced[task.name] = res.synced;
+      } catch (err) {
+        results.errors.push(`${task.name}: ${err.message}`);
+        logError(`CloudSync:${task.name}`, err);
+      }
     }
   }
 
@@ -309,7 +319,7 @@ export async function runFullSync(db, role = 'Staff') {
 
 export async function pullFromCloud(db) {
   const results = { success: true, pulled: {}, errors: [] };
-  
+
   const tables = [
     { local: 'categories', cloud: 'cloud_categories' },
     { local: 'suppliers', cloud: 'cloud_suppliers' },
@@ -329,7 +339,7 @@ export async function pullFromCloud(db) {
       if (!data || data.length === 0) continue;
 
       let count = 0;
-      
+
       // Safety: Only map Supabase columns to existing local SQLite columns
       const tableInfo = db.prepare(`PRAGMA table_info(${t.local})`).all();
       const validLocalColumns = new Set(tableInfo.map(col => col.name));
@@ -342,12 +352,12 @@ export async function pullFromCloud(db) {
         const mappingCol = c === 'local_id' ? 'id' : c;
         return validLocalColumns.has(mappingCol);
       });
-      
+
       const placeholders = columns.map(() => '?').join(', ');
       const colNames = columns.map(c => c === 'local_id' ? 'id' : c).join(', ');
 
       const upsertStmt = db.prepare(`INSERT OR REPLACE INTO ${t.local} (${colNames}) VALUES (${placeholders})`);
-      
+
       const transaction = db.transaction((rows) => {
         for (const row of rows) {
           const vals = columns.map(c => {
@@ -379,22 +389,31 @@ export function startAutoSync(db) {
   // Initial sync
   runFullSync(db, currentActiveRole).catch(e => logError('InitialSync', e));
 
-  // Sync every 5 minutes
+  // Sync every 2 minutes
   setInterval(() => {
     try {
       const row = db.prepare("SELECT value FROM settings WHERE key = 'autoSync'").get();
-      const enabled = row ? (row.value === 'true' || row.value === '1') : true; 
-      
+      const enabled = row ? (row.value === 'true' || row.value === '1') : true;
+
       if (enabled) {
         runFullSync(db, currentActiveRole).catch(err => logError('AutoSync', err));
       }
     } catch (e) {
       logError('AutoSyncToggleCheck', e);
     }
-  }, 5 * 60 * 1000);
+  }, 2 * 60 * 1000);
 }
 
-export function setActiveRole(role) {
+export async function setActiveRole(role, db) {
   currentActiveRole = role;
   logInfo('CloudSync:RoleUpdate', `System role updated to: ${role}`);
+
+  if (role === 'Owner' && db) {
+    logInfo('CloudSync:RoleUpdate', `Triggering immediate sync for Owner setup`);
+    try {
+      await runFullSync(db, role);
+    } catch (err) {
+      logError('ImmediateOwnerSync', err);
+    }
+  }
 }

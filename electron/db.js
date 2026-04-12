@@ -147,7 +147,7 @@ export function initDb() {
   `).run();
 
   // Add machine_id and hostname to tables
-  const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs'];
+  const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs', 'users', 'categories', 'suppliers', 'expense_categories'];
   syncTables.forEach(t => {
     try { db.prepare(`ALTER TABLE ${t} ADD COLUMN machine_id TEXT`).run(); } catch(e){}
     try { db.prepare(`ALTER TABLE ${t} ADD COLUMN hostname TEXT`).run(); } catch(e){}

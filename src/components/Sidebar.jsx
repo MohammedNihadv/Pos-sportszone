@@ -51,7 +51,7 @@ const NAV_SECTIONS = [
   },
 ];
 
-const SyncBadge = ({ status, collapsed, dm, lastSync }) => {
+const SyncBadge = ({ status, collapsed, dm, lastSync, triggerManualSync, isOwner }) => {
   const config = {
     synced:  { icon: <Wifi className="w-3.5 h-3.5" />,                            label: 'SYNCED',      cls: dm ? 'text-emerald-400 bg-emerald-900/30' : 'text-[#007f5f] bg-[#e6fceb]' },
     syncing: { icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />,          label: 'SYNCING...',  cls: dm ? 'text-amber-400 bg-amber-900/30 animate-pulse' : 'text-amber-700 bg-amber-100 animate-pulse' },
@@ -65,9 +65,13 @@ const SyncBadge = ({ status, collapsed, dm, lastSync }) => {
     if (diff < 60) return `${diff}M AGO`;
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+  
+  const Component = isOwner ? 'button' : 'div';
+  const interactionProps = isOwner ? { onClick: () => triggerManualSync(), title: 'Click to force sync' } : {};
+  const interactiveCls = isOwner && status !== 'syncing' ? 'cursor-pointer hover:brightness-95 active:scale-95' : '';
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl text-[10px] font-bold tracking-wider transition-all border-none ${config.cls}`}>
+    <Component {...interactionProps} className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl text-[10px] w-full font-bold tracking-wider transition-all border-none ${config.cls} ${interactiveCls}`}>
       <div className="flex items-center gap-1.5">
         {config.icon}
         {!collapsed && config.label}
@@ -75,12 +79,12 @@ const SyncBadge = ({ status, collapsed, dm, lastSync }) => {
       {!collapsed && lastSync && status === 'synced' && (
         <span className="opacity-50 text-[8px] uppercase">{getTimeAgo(lastSync)}</span>
       )}
-    </div>
+    </Component>
   );
 };
 
 export default function Sidebar() {
-  const { darkMode, setDarkMode, sidebarCollapsed, setSidebarCollapsed, syncStatus, lastSync, logo, isAdminUnlocked, lockAdmin, currentUser } = useApp();
+  const { darkMode, setDarkMode, sidebarCollapsed, setSidebarCollapsed, syncStatus, lastSync, triggerManualSync, isOwner, logo, isAdminUnlocked, lockAdmin, currentUser } = useApp();
   const dm = darkMode;
   const [appVersion, setAppVersion] = useState('1.0.0');
 
@@ -179,7 +183,7 @@ export default function Sidebar() {
 
         {/* Bottom Section */}
         <div className={`p-3 border-t flex flex-col gap-2 ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
-          <SyncBadge status={syncStatus} collapsed={sidebarCollapsed} dm={dm} lastSync={lastSync} />
+          <SyncBadge status={syncStatus} collapsed={sidebarCollapsed} dm={dm} lastSync={lastSync} triggerManualSync={triggerManualSync} isOwner={isOwner} />
           {!sidebarCollapsed && (
             <p className={`text-center text-[10px] font-bold tracking-wider ${dm ? 'text-slate-600' : 'text-slate-300'}`}>
               v{appVersion}

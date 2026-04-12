@@ -218,26 +218,30 @@ export function AppProvider({ children }) {
       return updated;
     });
   }, [api]);
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
   // Notify backend of role changes and set up periodic refresh for Owners
   useEffect(() => {
     if (api && currentUser) {
-      api.setActiveRole(currentUser.role);
+      api.setActiveRole(currentUser.role).then(() => {
+        if (currentUser.role === 'Owner') {
+          loadData();
+        }
+      });
     }
-  }, [api, currentUser]);
+  }, [api, currentUser, loadData]);
 
   useEffect(() => {
     if (!api || !isOwner) return;
 
-    // Background refresh every 5 minutes for Owner
+    // Background refresh every 2 minutes for Owner
     const interval = setInterval(() => {
       console.log('Owner background data refresh triggered...');
       loadData();
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, [api, isOwner, loadData]);
@@ -287,6 +291,19 @@ export function AppProvider({ children }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  const triggerManualSync = useCallback(async () => {
+    if (!api || !isOwner || !isOnline) return;
+    try {
+      setSyncStatus('syncing');
+      await api.syncToCloud(currentUser.role);
+      await loadData();
+      setSyncStatus('synced');
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+      setSyncStatus('offline');
+    }
+  }, [api, isOwner, isOnline, currentUser, loadData]);
 
   const setCurrentUser = useCallback((user) => {
     setCurrentUserState(user);
@@ -361,18 +378,18 @@ export function AppProvider({ children }) {
     sales, setSales, expenses, setExpenses, purchases, setPurchases,
     credits, setCredits: setCreditsState, customers, setCustomers,
     appSettings, saveAppSettings, isOwner, isOnline, lastSync, setLastSync,
-    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS,
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, triggerManualSync, isReady, PRODUCT_ICONS,
     PRODUCT_ICONS_CATEGORIZED
   }), [
     darkMode, sidebarCollapsed, toasts, currentSyncStatus, logo,
     isAdminUnlocked, adminPin, users, currentUser, isLocked,
     soundEnabled, autoLockEnabled, autoLockTimeout,
     products, suppliers, categories, expenseCategories,
-    sales, expenses, purchases, credits, customers,
+    sales, expenses, purchases, credits, customers, setCustomers,
     appSettings, saveAppSettings, isOwner, isOnline, lastSync,
     addToast, dismissToast, setLogo, lockAdmin, updateAdminPin,
     setCurrentUser, setSoundEnabled, setAutoLockEnabled, setAutoLockTimeout,
-    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, isReady, PRODUCT_ICONS,
+    refreshProducts, refreshSales, refreshCustomers, refreshCredits, loadData, triggerManualSync, isReady, PRODUCT_ICONS,
     PRODUCT_ICONS_CATEGORIZED
   ]);
 

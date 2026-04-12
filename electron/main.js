@@ -126,7 +126,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ─── Helper: safe IPC wrapper ───
 function safeHandle(channel, handler) {
   try {
     ipcMain.handle(channel, async (...args) => {
@@ -156,7 +155,7 @@ safeHandle('get-system-health', () => {
     ? path.join(process.cwd(), 'shop.db')
     : path.join(app.getPath('userData'), 'shop.db');
   let dbSize = 0;
-  try { dbSize = fs.statSync(dbPath).size; } catch (err) { /* ignore */ }
+  try { dbSize = fs.statSync(dbPath).size; } catch { /* ignore */ }
 
   const counts = {};
   ['products', 'sales', 'expenses', 'purchases', 'suppliers', 'categories'].forEach(t => {
@@ -571,8 +570,8 @@ safeHandle('add-supplier', (_, name) => {
 });
 
 // ─── IPC: Cloud Sync ───
-safeHandle('set-active-role', (_, role) => {
-  setActiveRole(role);
+safeHandle('set-active-role', async (_, role) => {
+  await setActiveRole(role, getDb());
   return true;
 });
 
