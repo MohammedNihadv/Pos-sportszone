@@ -146,19 +146,6 @@ export function initDb() {
     )
   `).run();
 
-  // Add machine_id and hostname to tables
-  const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs', 'users', 'categories', 'suppliers', 'expense_categories'];
-  syncTables.forEach(t => {
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN machine_id TEXT`).run(); } catch(e){}
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN hostname TEXT`).run(); } catch(e){}
-  });
-
-  // Soft Delete Migrations (Phase 15)
-  const softDeleteTables = ['products', 'expense_categories', 'sales', 'expenses', 'purchases', 'categories', 'suppliers', 'users', 'customers', 'credits'];
-  softDeleteTables.forEach(t => {
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN is_deleted INTEGER DEFAULT 0`).run(); } catch(e){}
-  });
-
   // Customers table
   db.prepare(`
     CREATE TABLE IF NOT EXISTS customers (
@@ -168,7 +155,10 @@ export function initDb() {
       email TEXT,
       orders INTEGER DEFAULT 0,
       total REAL DEFAULT 0,
-      last_order TEXT
+      last_order TEXT,
+      machine_id TEXT,
+      hostname TEXT,
+      is_deleted INTEGER DEFAULT 0
     )
   `).run();
 
@@ -182,7 +172,10 @@ export function initDb() {
       paid REAL DEFAULT 0,
       pending REAL DEFAULT 0,
       date TEXT DEFAULT CURRENT_DATE,
-      items TEXT
+      items TEXT,
+      machine_id TEXT,
+      hostname TEXT,
+      is_deleted INTEGER DEFAULT 0
     )
   `).run();
 
@@ -195,6 +188,19 @@ export function initDb() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+
+  // Add machine_id and hostname to tables
+  const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs', 'users', 'categories', 'suppliers', 'expense_categories'];
+  syncTables.forEach(t => {
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN machine_id TEXT`).run(); } catch(e){}
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN hostname TEXT`).run(); } catch(e){}
+  });
+
+  // Soft Delete Migrations (Phase 15)
+  const softDeleteTables = ['products', 'expense_categories', 'sales', 'expenses', 'purchases', 'categories', 'suppliers', 'users', 'customers', 'credits'];
+  softDeleteTables.forEach(t => {
+    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN is_deleted INTEGER DEFAULT 0`).run(); } catch(e){}
+  });
 
   // Seed default users if empty
   const uCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;

@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
 export default function Customers() {
-  const { customers, setCustomers, darkMode, addToast, isOwner } = useApp();
+  const { customers, setCustomers, darkMode, addToast, isOwner, refreshCustomers } = useApp();
   const dm = darkMode;
   const [search, setSearch] = useState('');
   
@@ -47,26 +47,36 @@ export default function Customers() {
     setFormData({ name: '', phone: '', email: '' });
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.phone.trim()) {
       addToast('Name and phone are required', 'warning');
       return;
     }
     
-    if (editingCustomer) {
-      setCustomers(safeCustomers.map(c => c.id === editingCustomer.id ? { ...c, ...formData } : c));
-      addToast('Customer updated successfully!', 'success');
-    } else {
-      const newCustomer = {
-        id: Date.now(),
-        ...formData,
-        orders: 0,
-        total: 0,
-        lastOrder: '-'
-      };
-      setCustomers([...safeCustomers, newCustomer]);
-      addToast('Customer added successfully!', 'success');
+    try {
+      if (window.api) {
+        await window.api.saveCustomer({
+          ...(editingCustomer || {}),
+          ...formData,
+          orders: editingCustomer ? formData.orders : 0,
+          total: editingCustomer ? formData.total : 0,
+          last_order: editingCustomer ? formData.lastOrder : '-'
+        });
+        await refreshCustomers();
+        addToast(editingCustomer ? 'Customer updated!' : 'Customer added!', 'success');
+      } else {
+        // Fallback for dev mode
+        if (editingCustomer) {
+          setCustomers(safeCustomers.map(c => c.id === editingCustomer.id ? { ...c, ...formData } : c));
+        } else {
+          const newCustomer = { id: Date.now(), ...formData, orders: 0, total: 0, lastOrder: '-' };
+          setCustomers([...safeCustomers, newCustomer]);
+        }
+        addToast('Saved (Local Mode)', 'success');
+      }
+    } catch (err) {
+      addToast('Error saving: ' + err.message, 'error');
     }
     closeModal();
   };

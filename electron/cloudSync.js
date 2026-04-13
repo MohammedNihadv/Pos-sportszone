@@ -149,6 +149,26 @@ async function syncCategories(db) {
   return { table: 'categories', synced: rows.length };
 }
 
+async function syncExpenseCategories(db) {
+  const rows = db.prepare('SELECT * FROM expense_categories ORDER BY id').all();
+  if (rows.length === 0) return { table: 'expense_categories', synced: 0 };
+
+  const payload = rows.map(r => ({
+    local_id: r.id,
+    machine_id: r.machine_id || getDeviceId(),
+    hostname: r.hostname || getHostname(),
+    name: r.name,
+    is_deleted: r.is_deleted || 0
+  }));
+
+  const { error } = await supabase
+    .from('cloud_expense_categories')
+    .upsert(payload, { onConflict: ['machine_id', 'local_id'] });
+
+  if (error) throw new Error(`cloud_expense_categories upsert failed: ${error.message}`);
+  return { table: 'expense_categories', synced: rows.length };
+}
+
 async function syncPurchases(db) {
   const rows = db.prepare('SELECT * FROM purchases ORDER BY id').all();
   if (rows.length === 0) return { table: 'purchases', synced: 0 };
@@ -233,6 +253,7 @@ export async function runFullSync(db, role = 'Staff') {
     { name: 'categories', fn: syncCategories },
     { name: 'purchases', fn: syncPurchases },
     { name: 'users', fn: syncUsers },
+    { name: 'expense_categories', fn: syncExpenseCategories },
     // ...
     {
       name: 'customers', fn: async (db) => {
@@ -322,6 +343,7 @@ export async function pullFromCloud(db) {
 
   const tables = [
     { local: 'categories', cloud: 'cloud_categories' },
+    { local: 'expense_categories', cloud: 'cloud_expense_categories' },
     { local: 'suppliers', cloud: 'cloud_suppliers' },
     { local: 'products', cloud: 'cloud_products' },
     { local: 'expenses', cloud: 'cloud_expenses' },
