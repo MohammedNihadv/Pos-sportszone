@@ -12,4 +12,4 @@ ALTER TABLE cloud_customers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT 
 ALTER TABLE cloud_credits ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 
 -- If you have expense categories synced:
--- ALTER TABLE cloud_expense_categories ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE cloud_expense_categories ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;

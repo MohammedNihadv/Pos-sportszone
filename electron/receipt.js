@@ -51,6 +51,8 @@ export function generateReceiptHTML(sale, settings = {}) {
   const taxableAmount = totalTaxRate > 0 ? afterDiscount / (1 + totalTaxRate) : afterDiscount;
   const cgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (cgstRate / totalTaxRate) : 0;
   const sgst = totalTaxRate > 0 ? (afterDiscount - taxableAmount) * (sgstRate / totalTaxRate) : 0;
+  const grandTotal = Number(sale.total || afterDiscount);
+  const adjustment = grandTotal - afterDiscount;
 
   // Determine layout style classes
   const isThermal = printerType.includes('Thermal');
@@ -83,6 +85,7 @@ export function generateReceiptHTML(sale, settings = {}) {
     th { padding: 8px 4px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 2px solid #e2e8f0; }
     th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: right; }
     th:nth-child(2) { text-align: center; }
+    .adjustment { color: #d97706; font-style: italic; }
 
     .totals-box { background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; }
     .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #475569; font-weight: 600; }
@@ -102,7 +105,7 @@ export function generateReceiptHTML(sale, settings = {}) {
     ${businessGstin ? `<p class="gstin">GSTIN: ${businessGstin}</p>` : ''}
     ${businessPhone ? `<p>PH: ${businessPhone}</p>` : ''}
   </div>
-
+ 
   <div class="meta">
     <span>#INV-${saleId}</span>
     <span>${date}</span>
@@ -125,9 +128,10 @@ export function generateReceiptHTML(sale, settings = {}) {
   <div class="totals-box">
     <div class="total-row"><span>Subtotal</span><span>₹${subtotal.toLocaleString()}</span></div>
     ${discount > 0 ? `<div class="total-row" style="color:#ef4444;"><span>Discount</span><span>-₹${discount.toLocaleString()}</span></div>` : ''}
+    ${Math.abs(adjustment) > 0.1 ? `<div class="total-row adjustment"><span>Adjustment</span><span>${adjustment > 0 ? '+' : ''}₹${adjustment.toLocaleString()}</span></div>` : ''}
     ${cgstRateRaw > 0 ? `<div class="total-row"><span>CGST (${cgstRateRaw}%)</span><span>₹${cgst.toFixed(2)}</span></div>` : ''}
     ${sgstRateRaw > 0 ? `<div class="total-row"><span>SGST (${sgstRateRaw}%)</span><span>₹${sgst.toFixed(2)}</span></div>` : ''}
-    <div class="total-row grand-total"><span>Total</span><span>₹${Number(sale.total || afterDiscount).toLocaleString()}</span></div>
+    <div class="total-row grand-total"><span>Total</span><span>₹${grandTotal.toLocaleString()}</span></div>
   </div>
 
   <div class="footer">

@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import DateRangePicker from '../components/DateRangePicker';
 
 
-function SaleModal({ sale, onClose, onSave, dm }) {
+function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
   const isNew = !sale;
   const initBreakdown = sale?.paymentBreakdown || [{ method: sale?.payment_method || 'cash', amount: sale?.amountPaid || '' }];
   
@@ -81,8 +81,8 @@ function SaleModal({ sale, onClose, onSave, dm }) {
             <textarea className={inputCls + ' resize-none'} rows={2} value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} placeholder="jersey 5 collar, shorts pp, boot focus 2.0" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>
-            <div>
+            {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>}
+            <div className={showFinancials ? "" : "col-span-2"}>
               <label className={labelCls}>Selling Price (₹)</label>
               <input type="number" className={inputCls} value={form.selling} onChange={e => {
                 const s = e.target.value;
@@ -139,7 +139,7 @@ function SaleModal({ sale, onClose, onSave, dm }) {
             </div>
           )}
 
-          {form.cost && form.selling && (
+          {showFinancials && form.cost && form.selling && (
             <div className={`rounded-xl p-3 text-center ${profit >= 0 ? (dm ? 'bg-green-900/30' : 'bg-green-50') : (dm ? 'bg-red-900/30' : 'bg-red-50')}`}>
               <p className={`text-sm font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Profit: ₹{profit.toFixed(2)} &nbsp;|&nbsp; Margin: {pct}%
@@ -159,7 +159,8 @@ function SaleModal({ sale, onClose, onSave, dm }) {
 }
 
 export default function SalesLedger() {
-  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner } = useApp();
+  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked } = useApp();
+  const showFinancials = isAdminUnlocked || isOwner;
   const dm = darkMode;
 
   // Robust path to "YYYY-MM-DD" matching the date picker
@@ -229,6 +230,20 @@ export default function SalesLedger() {
       const realId = parseInt(String(entry.id).replace('live-', ''), 10);
       const orig = liveSales.find(s => s.id === realId);
       if (orig) {
+        const currentDescription = (orig.items || []).map(i => `${i.name} x${i.qty}`).join(', ');
+        let updatedItems = orig.items;
+
+        // If description was edited, we treat it as a manual correction so receipts match
+        if (entry.description !== currentDescription) {
+           updatedItems = [{
+             id: 'manual',
+             name: entry.description,
+             qty: 1,
+             price: entry.selling,
+             cost: entry.cost
+           }];
+        }
+
         const updated = {
            ...orig,
            total: entry.selling,
@@ -237,7 +252,8 @@ export default function SalesLedger() {
            changeAmount: entry.changeAmount,
            paymentBreakdown: entry.paymentBreakdown,
            changeReturnMethod: entry.changeReturnMethod,
-           date: entry.date
+           date: entry.date,
+           items: updatedItems
         };
         if (window.api) {
            await window.api.saveSale(updated);
@@ -303,10 +319,10 @@ export default function SalesLedger() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Total Entries', value: filtered.length, fmt: 'num', color: 'text-blue-600' },
-          { label: 'Total Cost (₹)', value: totals.cost, fmt: 'curr', color: dm ? 'text-white' : 'text-slate-800' },
+          showFinancials && { label: 'Total Cost (₹)', value: totals.cost, fmt: 'curr', color: dm ? 'text-white' : 'text-slate-800' },
           { label: 'Total Sales (₹)', value: totals.selling, fmt: 'curr', color: 'text-blue-600' },
-          { label: 'Total Profit (₹)', value: totals.profit, fmt: 'curr', color: totals.profit >= 0 ? 'text-green-600' : 'text-red-500' },
-        ].map(s => (
+          showFinancials && { label: 'Total Profit (₹)', value: totals.profit, fmt: 'curr', color: totals.profit >= 0 ? 'text-green-600' : 'text-red-500' },
+        ].filter(Boolean).map(s => (
           <div key={s.label} className={`${card} p-4`}>
             <p className={`text-xs font-medium ${dm ? 'text-slate-400' : 'text-slate-500'}`}>{s.label}</p>
             <p className={`text-2xl font-bold mt-1 ${s.color}`}>
@@ -341,10 +357,10 @@ export default function SalesLedger() {
               <th className={th}>Invoice</th>
               <th className={th}>Description</th>
               <th className={th}>Payment</th>
-              <th className={th + ' text-right'}>Cost (₹)</th>
+              {showFinancials && <th className={th + ' text-right'}>Cost (₹)</th>}
               <th className={th + ' text-right'}>Selling (₹)</th>
-              <th className={th + ' text-right'}>Profit (₹)</th>
-              <th className={th + ' text-right'}>Margin</th>
+              {showFinancials && <th className={th + ' text-right'}>Profit (₹)</th>}
+              {showFinancials && <th className={th + ' text-right'}>Margin</th>}
               <th className={th + ' text-right'}>Amount Paid</th>
               {!isOwner && <th className={th + ' text-center'}>Actions</th>}
             </tr></thead>
@@ -363,12 +379,14 @@ export default function SalesLedger() {
                       <span className="line-clamp-1 text-sm">{s.description}</span>
                     </td>
                     <td className={`px-4 py-3.5 text-xs font-semibold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>{s.payment_method}</td>
-                    <td className={`px-4 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>₹{s.cost.toLocaleString()}</td>
+                    {showFinancials && <td className={`px-4 py-3.5 text-right ${dm ? 'text-slate-300' : 'text-slate-600'}`}>₹{s.cost.toLocaleString()}</td>}
                     <td className="px-4 py-3.5 text-right font-semibold text-blue-600">₹{s.selling.toLocaleString()}</td>
-                    <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{profit.toLocaleString()}</td>
-                    <td className="px-4 py-3.5 text-right">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
-                    </td>
+                    {showFinancials && <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{profit.toLocaleString()}</td>}
+                    {showFinancials && (
+                      <td className="px-4 py-3.5 text-right">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
+                      </td>
+                    )}
                     <td className={`px-4 py-3.5 text-right font-bold ${dm ? 'text-emerald-400' : 'text-emerald-600'}`}>₹{s.amountPaid?.toLocaleString() || s.selling.toLocaleString()}</td>
                     {!isOwner && (
                       <td className="px-4 py-3.5 text-center">
@@ -390,12 +408,14 @@ export default function SalesLedger() {
               <tfoot>
                 <tr className={`border-t-2 font-bold ${dm ? 'border-slate-600 bg-slate-800' : 'border-slate-200 bg-slate-50'}`}>
                   <td colSpan={4} className={`px-4 py-3 text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>Total ({filtered.length} entries)</td>
-                  <td className={`px-4 py-3 text-right text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>₹{totals.cost.toLocaleString()}</td>
+                  {showFinancials && <td className={`px-4 py-3 text-right text-sm ${dm ? 'text-slate-300' : 'text-slate-700'}`}>₹{totals.cost.toLocaleString()}</td>}
                   <td className="px-4 py-3 text-right text-sm text-blue-600">₹{totals.selling.toLocaleString()}</td>
-                  <td className={`px-4 py-3 text-right text-sm ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{totals.profit.toLocaleString()}</td>
-                  <td className={`px-4 py-3 text-right text-xs font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {totals.selling > 0 ? ((totals.profit / totals.selling) * 100).toFixed(1) : 0}%
-                  </td>
+                  {showFinancials && <td className={`px-4 py-3 text-right text-sm ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{totals.profit.toLocaleString()}</td>}
+                  {showFinancials && (
+                    <td className={`px-4 py-3 text-right text-xs font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {totals.selling > 0 ? ((totals.profit / totals.selling) * 100).toFixed(1) : 0}%
+                    </td>
+                  )}
                   <td className={`px-4 py-3 text-right text-sm font-bold ${dm ? 'text-emerald-400' : 'text-emerald-600'}`}>₹{totals.paid.toLocaleString()}</td>
                   {!isOwner && <td />}
                 </tr>
@@ -412,7 +432,7 @@ export default function SalesLedger() {
       </div>
 
       {(modal === 'new' || (modal && modal.id)) && (
-        <SaleModal sale={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} />
+        <SaleModal sale={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} showFinancials={showFinancials} />
       )}
     </div>
   );

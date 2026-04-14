@@ -147,6 +147,17 @@ CREATE TABLE IF NOT EXISTS cloud_categories (
   UNIQUE(machine_id, local_id)
 );
 
+-- Cloud Expense Categories
+CREATE TABLE IF NOT EXISTS cloud_expense_categories (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  local_id    INTEGER NOT NULL,
+  machine_id  TEXT NOT NULL,
+  hostname    TEXT,
+  name        TEXT NOT NULL,
+  synced_at   TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(machine_id, local_id)
+);
+
 -- Cloud Audit Logs
 CREATE TABLE IF NOT EXISTS cloud_audit_logs (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -177,6 +188,7 @@ ALTER TABLE cloud_suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_credits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cloud_expense_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cloud_commands ENABLE ROW LEVEL SECURITY;
 
@@ -195,6 +207,9 @@ CREATE POLICY "Full access" ON cloud_credits FOR ALL USING (true) WITH CHECK (tr
 
 DROP POLICY IF EXISTS "Full access" ON cloud_categories;
 CREATE POLICY "Full access" ON cloud_categories FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Full access" ON cloud_expense_categories;
+CREATE POLICY "Full access" ON cloud_expense_categories FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Full access" ON cloud_audit_logs;
 CREATE POLICY "Full access" ON cloud_audit_logs FOR ALL USING (true) WITH CHECK (true);

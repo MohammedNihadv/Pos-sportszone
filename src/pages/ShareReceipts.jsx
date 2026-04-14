@@ -102,6 +102,9 @@ export default function ShareReceipts() {
       });
       
       msg += `\n--------------------------------\n`;
+      const subtotalItems = (sale.items || []).reduce((sum, i) => sum + (i.price * i.qty), 0);
+      const adjustment = grandTotal - (subtotalItems - (sale.discount || 0));
+
       msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
       
       if (taxPct > 0) {
@@ -109,6 +112,9 @@ export default function ShareReceipts() {
       }
       if (sale.discount > 0) {
         msg += `Discount: -₹${sale.discount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      }
+      if (Math.abs(adjustment) > 0.1) {
+        msg += `Adjustment: ${adjustment > 0 ? '+' : ''}₹${adjustment.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
       }
       
       msg += `*Total: ₹${grandTotal.toLocaleString('en-IN')}*\n`;
