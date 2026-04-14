@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, X, AlertTriangle, RefreshCw, Lock } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
 
 function ProductModal({ product, onClose, onSave, dm, categories, setCategories, addToast, showFinancials, PRODUCT_ICONS_CATEGORIZED }) {
-  const [form, setForm] = useState(product || { name: '', sku: '', category: categories[0]?.name || 'Jerseys', stock: '', cost: '', price: '', emoji: '📦' });
+  const [form, setForm] = useState(product || { name: '', sku: '', barcode: '', category: categories[0]?.name || 'Jerseys', stock: '', cost: '', price: '', emoji: '📦' });
   const isNew = !product;
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
@@ -27,6 +28,10 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
     const newCat = { name: newName.trim() };
     if (window.api) {
       const saved = await window.api.saveCategory(newCat);
+      if (saved && saved.error) {
+        addToast(saved.error, 'error');
+        return;
+      }
       setCategories(prev => [...prev, saved]);
     } else {
       setCategories(prev => [...prev, { ...newCat, id: Date.now() }]);
@@ -64,11 +69,11 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
         <div className="p-5 grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className={labelCls}>Product Name *</label>
-            <input className={inputCls} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Jersey 5 Collar" />
+            <input className={inputCls} value={form.name || ''} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Jersey 5 Collar" />
           </div>
           <div>
             <label className={labelCls}>SKU *</label>
-            <input className={inputCls} value={form.sku} onChange={e => setForm(p => ({ ...p, sku: e.target.value }))} placeholder="JR001" />
+            <input className={inputCls} value={form.sku || ''} onChange={e => setForm(p => ({ ...p, sku: e.target.value }))} placeholder="JR001" />
           </div>
           <div>
             <label className={labelCls}>Category</label>
@@ -93,9 +98,9 @@ function ProductModal({ product, onClose, onSave, dm, categories, setCategories,
               </select>
             )}
           </div>
-          <div><label className={labelCls}>Stock Qty</label><input type="number" className={inputCls} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} placeholder="0" /></div>
+          <div><label className={labelCls}>Stock Qty</label><input type="number" className={inputCls} value={form.stock || ''} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} placeholder="0" /></div>
           {showFinancials && <div><label className={labelCls}>Cost (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} placeholder="0" /></div>}
-          <div className={showFinancials ? "" : "col-span-2"}><label className={labelCls}>Price (₹) *</label><input type="number" className={inputCls} value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="0" /></div>
+          <div className={showFinancials ? "" : "col-span-2"}><label className={labelCls}>Price (₹) *</label><input type="number" className={inputCls} value={form.price || ''} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="0" /></div>
           
           <div className="col-span-2">
             <label className={labelCls}>Product Icon</label>
@@ -146,6 +151,18 @@ export default function Inventory() {
   const showFinancials = isAdminUnlocked || isOwner;
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
+  const [isRepairing, setIsRepairing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const searchRef = useRef(null);
+
+  // Auto-focus search on mount or after modal close/deletion
+  // Autofocus search on MOUNT only - do not refocus on data changes
+  useEffect(() => {
+    if (searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, []);
+
 
   const filtered = products.filter(p =>
     (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -155,14 +172,21 @@ export default function Inventory() {
 
   const handleSave = async (product) => {
     if (window.api) {
-      if (product.id) {
-        await window.api.saveProduct(product);
-        setProducts(prev => prev.map(p => p.id === product.id ? product : p));
-        addToast(`${product.name} updated`, 'success');
-      } else {
-        const saved = await window.api.saveProduct(product);
-        setProducts(prev => [...prev, saved]);
-        addToast(`${product.name} added to inventory`, 'success');
+      try {
+        if (product.id) {
+          await window.api.saveProduct(product);
+          setProducts(prev => prev.map(p => p.id === product.id ? product : p));
+          addToast(`${product.name} updated`, 'success');
+        } else {
+          const saved = await window.api.saveProduct(product);
+          setProducts(prev => [...prev, saved]);
+          addToast(`${product.name} added to inventory`, 'success');
+        }
+      } catch (err) {
+        console.error('Save failed:', err);
+        const msg = err.message || 'Unknown Error';
+        addToast(`Save Failed: ${msg}`, 'error');
+        
       }
     } else {
       if (product.id) {
@@ -174,14 +198,29 @@ export default function Inventory() {
         addToast(`${product.name} added to inventory`, 'success');
       }
     }
+    // Refocus after save
+    if (searchRef.current) searchRef.current.focus();
   };
 
-  const handleDelete = async (id, name) => {
+  const handleDelete = (id, name) => {
+    setConfirmDelete({ id, name });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, name } = confirmDelete;
+    setConfirmDelete(null);
+
     if (window.api) {
       await window.api.deleteProduct(id);
     }
     setProducts(prev => prev.filter(p => p.id !== id));
     addToast(`${name} deleted`, 'warning');
+    
+    // Refocus after delete
+    setTimeout(() => {
+      if (searchRef.current) searchRef.current.focus();
+    }, 150);
   };
 
   const totalValue = products.reduce((s, p) => s + (p.stock * p.cost), 0);
@@ -243,6 +282,7 @@ export default function Inventory() {
         <div className={`px-5 py-3.5 border-b flex items-center gap-3 ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <Search className="w-4 h-4 text-slate-400" />
           <input
+            ref={searchRef}
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search by name, SKU, or category..."
             className={`flex-1 text-sm outline-none bg-transparent ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800'}`}
@@ -302,7 +342,10 @@ export default function Inventory() {
       {(modal === 'new' || (modal && modal.id)) && (
         <ProductModal
           product={modal === 'new' ? null : modal}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null);
+            setTimeout(() => searchRef.current?.focus(), 50);
+          }}
           onSave={handleSave}
           dm={dm}
           categories={categories}
@@ -310,6 +353,20 @@ export default function Inventory() {
           addToast={addToast}
           showFinancials={showFinancials}
           PRODUCT_ICONS_CATEGORIZED={PRODUCT_ICONS_CATEGORIZED}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Delete Product"
+          message={`Are you sure you want to delete ${confirmDelete.name}? This will remove it from inventory permanently.`}
+          onConfirm={executeDelete}
+          onCancel={() => {
+            setConfirmDelete(null);
+            setTimeout(() => searchRef.current?.focus(), 100);
+          }}
+          dm={dm}
         />
       )}
     </div>

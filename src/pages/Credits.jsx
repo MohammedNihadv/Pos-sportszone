@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle, Trash2, AlertCircle, X } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useApp } from '../context/AppContext';
 
 export default function Credits() {
@@ -9,6 +10,7 @@ export default function Credits() {
   const [settleModal, setSettleModal] = useState(null); // { id, customer_name, total, paid, pending, items }
   const [settleAmount, setSettleAmount] = useState('');
   const [settleMethod, setSettleMethod] = useState('cash');
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const handleSettle = async () => {
     const amount = parseFloat(settleAmount) || 0;
@@ -43,9 +45,14 @@ export default function Credits() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this credit entry? This should only be done for errors.')) return;
-    if (!window.api) return;
+  const handleDelete = (id) => {
+    setConfirmDelete(id);
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const id = confirmDelete;
+    setConfirmDelete(null);
     try {
       await window.api.deleteCredit(id);
       await refreshCredits();
@@ -177,6 +184,17 @@ export default function Credits() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Remove Credit Entry"
+          message="Are you sure you want to remove this credit entry? This should only be done if it was entered by error."
+          onConfirm={executeDelete}
+          onCancel={() => setConfirmDelete(null)}
+          dm={dm}
+        />
       )}
     </div>
   );

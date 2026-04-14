@@ -173,16 +173,10 @@ export function AppProvider({ children }) {
         }
         setIsReady(true);
       } catch (err) {
-        console.warn('API load failed, using fallback data:', err);
-        setProducts(DEFAULT_PRODUCTS); setSuppliers(DEFAULT_SUPPLIERS);
-        setCategories(DEFAULT_CATEGORIES); setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
-        setCustomersState(DEFAULT_CUSTOMERS); setCreditsState([]);
-        setUsers([
-          { id: 1, role: 'Admin', name: 'Admin', pin: '1234' },
-          { id: 2, role: 'Cashier', name: 'Cashier', pin: '0000' },
-          { id: 3, role: 'Owner', name: 'Owner', pin: '1111' },
-        ]);
-        setIsReady(true);
+        console.warn('API background refresh failed (swallowed to prevent UI reset):', err);
+        // Important: We NO LONGER reset to defaults here. 
+        // Wiping out state on a background error causes the UI to flicker and lose focus.
+        setIsReady(true); 
       }
     } else {
       setProducts(DEFAULT_PRODUCTS);

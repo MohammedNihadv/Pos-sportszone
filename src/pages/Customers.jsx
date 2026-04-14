@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, Search, Phone, Mail, Edit, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { playSound } from '../utils/sounds';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function Customers() {
   const { customers, setCustomers, darkMode, addToast, isOwner, refreshCustomers } = useApp();
@@ -12,6 +13,8 @@ export default function Customers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', orders: 0, total: 0, lastOrder: '-' });
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const searchRef = useRef(null);
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
   const th = `px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide ${dm ? 'text-slate-400 bg-slate-800' : 'text-slate-500 bg-slate-50'}`;
@@ -45,6 +48,8 @@ export default function Customers() {
     setIsModalOpen(false);
     setEditingCustomer(null);
     setFormData({ name: '', phone: '', email: '' });
+    // Restore focus
+    setTimeout(() => searchRef.current?.focus(), 50);
   };
 
   const handleSave = async (e) => {
@@ -81,12 +86,25 @@ export default function Customers() {
     closeModal();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this customer?')) {
-      playSound('error');
-      setCustomers(safeCustomers.filter(c => c.id !== id));
-      addToast('Customer deleted', 'info');
+  const handleDelete = (id, customer) => {
+    setConfirmDelete({ id, customer });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, customer } = confirmDelete;
+    setConfirmDelete(null);
+
+    if (window.api) {
+      await window.api.deleteCustomer(id);
     }
+    const updated = customers.filter(c => c.id !== id);
+    setCustomers(updated);
+    addToast(`${customer.name} removed from customer list`, 'warning');
+    
+    setTimeout(() => {
+      if (searchRef.current) searchRef.current.focus();
+    }, 150);
   };
 
   return (
@@ -120,7 +138,11 @@ export default function Customers() {
       <div className={`${card} overflow-hidden`}>
         <div className={`px-5 py-3.5 border-b flex items-center gap-3 ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <Search className="w-4 h-4 text-slate-400" />
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or phone..."
+          <input 
+            ref={searchRef}
+            value={search} 
+            onChange={e=>setSearch(e.target.value)} 
+            placeholder="Search by name or phone..."
             className={`flex-1 text-sm outline-none bg-transparent ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800'}`} />
         </div>
         
@@ -166,7 +188,7 @@ export default function Customers() {
                         <button onClick={() => openModal(c)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(c.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                        <button onClick={() => handleDelete(c.id, c)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -267,6 +289,20 @@ export default function Customers() {
             </form>
           </div>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Delete Customer"
+          message={`Are you sure you want to delete ${confirmDelete.customer.name}? This will remove their record from the database.`}
+          onConfirm={executeDelete}
+          onCancel={() => {
+            setConfirmDelete(null);
+            setTimeout(() => searchRef.current?.focus(), 100);
+          }}
+          dm={dm}
+        />
       )}
     </div>
   );

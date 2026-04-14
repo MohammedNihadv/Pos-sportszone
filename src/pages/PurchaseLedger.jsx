@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, X, Building2, CreditCard, AlertCircle, FileText, C
 import { useApp } from '../context/AppContext';
 import PaymentBreakdown from '../components/PaymentBreakdown';
 import DateRangePicker from '../components/DateRangePicker';
+import ConfirmModal from '../components/ConfirmModal';
 
 // Ensure we extract unique suppliers from both the supplier list and existing purchases
 function getUniqueSuppliers(suppliers, purchases) {
@@ -67,6 +68,9 @@ function EntryModal({ entry, onClose, onSave, dm, suppliersList, setSuppliers, a
   };
 
   const handleSave = () => {
+    if (!form.supplier) return alert('Please select a supplier.');
+    if (!form.debit) return alert('Please enter a purchase total.');
+
     const totalPaid = (form.paymentBreakdown || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
     const finalMethod = (form.paymentBreakdown || []).length > 1 ? 'Split' : (form.paymentBreakdown?.[0]?.method || 'Cash');
 
@@ -154,6 +158,7 @@ export default function PurchaseLedger() {
   const [openingEdit, setOpeningEdit] = useState(false);
   const [modal, setModal] = useState(null); // null | 'new' | entry object
   const [supplierFilter, setSupplierFilter] = useState('All');
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -222,7 +227,11 @@ export default function PurchaseLedger() {
     };
 
     if (window.api) {
-      await window.api.savePurchase(purchaseData);
+      const savedResult = await window.api.savePurchase(purchaseData);
+      if (savedResult && savedResult.error) {
+        addToast(`Error: ${savedResult.error}`, 'error');
+        return;
+      }
     }
 
     const exists = purchases.find(p => p.id === purchaseData.id);
@@ -235,14 +244,20 @@ export default function PurchaseLedger() {
     }
   };
 
-  const handleDelete = async (id, supplier) => {
-    if (window.confirm(`Delete entry for ${supplier}?`)) {
-      if (window.api) {
-        await window.api.deletePurchase(id);
-      }
-      setPurchases(prev => prev.filter(e => e.id !== id));
-      addToast(`${supplier} entry removed`, 'warning');
+  const handleDelete = (id, supplier) => {
+    setConfirmDelete({ id, supplier });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, supplier } = confirmDelete;
+    setConfirmDelete(null);
+
+    if (window.api) {
+      await window.api.deletePurchase(id);
     }
+    setPurchases(prev => prev.filter(e => e.id !== id));
+    addToast(`${supplier} entry removed`, 'warning');
   };
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
@@ -416,6 +431,17 @@ export default function PurchaseLedger() {
           onClose={() => setModal(null)} 
           onSave={handleSave} 
           dm={dm} 
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Delete Ledger Entry"
+          message={`Are you sure you want to delete the entry for ${confirmDelete.supplier}?`}
+          onConfirm={executeDelete}
+          onCancel={() => setConfirmDelete(null)}
+          dm={dm}
         />
       )}
     </div>

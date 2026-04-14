@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Search, X, TrendingUp, Edit2, Trash2, Check, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import DateRangePicker from '../components/DateRangePicker';
+import ConfirmModal from '../components/ConfirmModal';
 
 
 function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
@@ -9,52 +10,43 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
   const initBreakdown = sale?.paymentBreakdown || [{ method: sale?.payment_method || 'cash', amount: sale?.amountPaid || '' }];
   
   const [form, setForm] = useState(sale || {
-    date: new Date().toLocaleDateString('en-CA'), inv: '', description: '', cost: '', selling: '', payment_method: 'cash', amountPaid: '', changeAmount: '', paymentBreakdown: [{ method: 'cash', amount: '' }], changeReturnMethod: 'cash'
+    date: new Date().toLocaleDateString('en-CA'), inv: '', description: '', cost: '', selling: '', discount: '', payment_method: 'cash', amountPaid: '', changeAmount: '', paymentBreakdown: [{ method: 'cash', amount: '' }], changeReturnMethod: 'cash'
   });
 
   const [breakdown, setBreakdown] = useState(initBreakdown.map(b => ({ ...b })));
 
-  // Auto-calculate change
+  // Dynamically compute totals from breakdown
+  const totalReceived = breakdown.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
+
   const calcChange = (received, total) => {
-    const r = parseFloat(received);
-    const t = parseFloat(total);
-    if (!isNaN(r) && !isNaN(t) && r >= t) return (r - t).toFixed(2);
+    const r = parseFloat(received) || 0;
+    const t = parseFloat(total) || 0;
+    if (r > t) return (r - t).toFixed(2);
     return '0.00';
   };
 
+  const changeAmount = calcChange(totalReceived, form.selling);
+
   const updateBreakdown = (idx, field, val) => {
-    const newB = [...breakdown];
-    newB[idx][field] = val;
-    setBreakdown(newB);
-    
-    // Auto-sum amount received
-    const totalReceived = newB.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
-    setForm(p => ({
-      ...p, 
-      amountPaid: totalReceived, 
-      changeAmount: calcChange(totalReceived, p.selling),
-      payment_method: newB.length === 1 ? newB[0].method : 'split'
-    }));
+    setBreakdown(prev => prev.map((b, i) => i === idx ? { ...b, [field]: val } : b));
   };
 
-  const addBreakdown = () => setBreakdown([...breakdown, { method: 'upi', amount: '' }]);
-  const removeBreakdown = (idx) => {
-    const newB = breakdown.filter((_, i) => i !== idx);
-    setBreakdown(newB);
-    const totalReceived = newB.reduce((sum, b) => sum + (parseFloat(b.amount) || 0), 0);
-    setForm(p => ({ ...p, amountPaid: totalReceived, changeAmount: calcChange(totalReceived, p.selling), payment_method: newB.length === 1 ? newB[0].method : 'split' }));
-  };
+  const addBreakdown = () => setBreakdown(prev => [...prev, { method: 'upi', amount: '' }]);
+  const removeBreakdown = (idx) => setBreakdown(prev => prev.filter((_, i) => i !== idx));
 
   const handleSave = () => {
-    if (!form.description || !form.cost || !form.selling) return;
+    if (!form.description) return alert('Please enter a description for the entry.');
+    if (!form.selling) return alert('Please enter a selling amount.');
     onSave({
       ...form,
       id: sale?.id || Date.now(),
-      cost: parseFloat(form.cost),
-      selling: parseFloat(form.selling),
-      amountPaid: parseFloat(form.amountPaid) || parseFloat(form.selling),
-      changeAmount: parseFloat(form.changeAmount) || 0,
+      cost: parseFloat(form.cost || 0),
+      selling: parseFloat(form.selling) || 0,
+      discount: parseFloat(form.discount) || 0,
+      amountPaid: parseFloat(totalReceived) || parseFloat(form.selling) || 0,
+      changeAmount: parseFloat(changeAmount) || 0,
       paymentBreakdown: breakdown,
+      payment_method: breakdown.length === 1 ? breakdown[0].method : 'split',
       items: form.description.split(',').length,
     });
     onClose();
@@ -75,20 +67,35 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Date</label><input type="date" className={inputCls} value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))} /></div>
-            <div><label className={labelCls}>Invoice #</label><input className={inputCls} value={form.inv} onChange={e => setForm(p => ({...p, inv: e.target.value}))} placeholder="INV-1043" /></div>
+            <div><label className={labelCls}>Invoice #</label><input className={inputCls} value={form.inv || ''} onChange={e => setForm(p => ({...p, inv: e.target.value}))} placeholder="INV-1043" /></div>
           </div>
           <div><label className={labelCls}>Description</label>
-            <textarea className={inputCls + ' resize-none'} rows={2} value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} placeholder="jersey 5 collar, shorts pp, boot focus 2.0" />
+            <textarea className={inputCls + ' resize-none'} rows={2} value={form.description || ''} onChange={e => setForm(p => ({...p, description: e.target.value}))} placeholder="jersey 5 collar, shorts pp, boot focus 2.0" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {showFinancials && <div><label className={labelCls}>Cost Price (₹)</label><input type="number" className={inputCls} value={form.cost} onChange={e => setForm(p => ({...p, cost: e.target.value}))} /></div>}
             <div className={showFinancials ? "" : "col-span-2"}>
-              <label className={labelCls}>Selling Price (₹)</label>
-              <input type="number" className={inputCls} value={form.selling} onChange={e => {
-                const s = e.target.value;
-                setForm(p => ({...p, selling: s, changeAmount: calcChange(p.amountPaid, s)}));
+              <label className={labelCls}>Subtotal (₹)</label>
+              <input type="number" className={inputCls} value={parseFloat(form.selling || 0) + parseFloat(form.discount || 0) || ''} onChange={e => {
+                const s = parseFloat(e.target.value) || 0;
+                const disc = parseFloat(form.discount) || 0;
+                setForm(p => ({...p, selling: s - disc}));
               }} />
             </div>
+          </div>
+          <div>
+            <label className={labelCls}>Discount (₹)</label>
+            <input type="number" className={inputCls} value={form.discount || ''} onChange={e => {
+              const newDisc = parseFloat(e.target.value) || 0;
+              const currentSubtotal = parseFloat(form.selling || 0) + parseFloat(form.discount || 0);
+              const newTotal = currentSubtotal - newDisc;
+              setForm(p => ({...p, discount: e.target.value, selling: newTotal}));
+            }} placeholder="0.00" />
+          </div>
+
+          <div className={`flex justify-between items-center p-3 rounded-xl border ${dm ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50/50 border-blue-100'}`}>
+             <span className={`font-bold ${dm ? 'text-slate-300' : 'text-slate-600'}`}>Final Total:</span>
+             <span className="font-bold text-blue-600 text-lg">₹{parseFloat(form.selling || 0).toFixed(2)}</span>
           </div>
 
           {/* Payment Breakdown Edit Segment */}
@@ -115,16 +122,16 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
             
             <div className="flex justify-between items-center text-sm border-t pt-2 border-dashed border-slate-300 dark:border-slate-600">
               <span className="font-semibold text-slate-500">Total Received:</span>
-              <span className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{parseFloat(form.amountPaid || 0).toFixed(2)}</span>
+              <span className={`font-bold ${dm ? 'text-white' : 'text-slate-800'}`}>₹{(totalReceived || 0).toFixed(2)}</span>
             </div>
           </div>
 
           {/* Return Change Via Segment */}
-          {parseFloat(form.changeAmount || 0) > 0 && (
+          {parseFloat(changeAmount || 0) > 0 && (
             <div className={`grid grid-cols-2 gap-3 p-3 items-center rounded-xl border-2 border-dashed ${dm ? 'bg-amber-900/10 border-amber-800/50' : 'bg-amber-50/50 border-amber-200'}`}>
               <div>
                 <label className={labelCls}>Change Due</label>
-                <div className={`text-xl font-bold ${dm ? 'text-amber-400' : 'text-amber-600'}`}>₹{form.changeAmount}</div>
+                <div className={`text-xl font-bold ${dm ? 'text-amber-400' : 'text-amber-600'}`}>₹{changeAmount}</div>
               </div>
               <div>
                 <label className={labelCls}>Return Via</label>
@@ -159,7 +166,7 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
 }
 
 export default function SalesLedger() {
-  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked } = useApp();
+  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked, refreshProducts } = useApp();
   const showFinancials = isAdminUnlocked || isOwner;
   const dm = darkMode;
 
@@ -185,6 +192,7 @@ export default function SalesLedger() {
         description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
         cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
         selling: s.total || 0,
+        discount: s.discount || 0,
         payment_method: s.paymentMethod || s.payment_method || 'cash',
         amountPaid: s.amountPaid || s.amount_paid || s.total || 0,
         changeAmount: s.changeAmount || s.change_amount || 0,
@@ -202,8 +210,17 @@ export default function SalesLedger() {
   }, [liveSales, manualSales]);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const searchRef = useRef(null);
+
+  // Auto-focus search on mount ONLY
+  useEffect(() => {
+    if (searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, []);
 
   const filtered = useMemo(() => allSales.filter(s => {
     const matchesSearch = (s.description || '').toLowerCase().includes(search.toLowerCase()) || (s.inv && s.inv.includes(search));
@@ -242,11 +259,32 @@ export default function SalesLedger() {
              price: entry.selling,
              cost: entry.cost
            }];
+        } else if (parseFloat(entry.selling) !== parseFloat(orig.total) || parseFloat(entry.discount) !== parseFloat(orig.discount || 0)) {
+           // If price OR discount was edited but NOT description, we update item prices proportionally
+           // This ensures (sum of items) == total + discount, so no "Adjustment" shows on receipt
+           const targetSubtotal = parseFloat(entry.selling) + parseFloat(entry.discount || 0);
+           const currentSubtotal = (orig.items || []).reduce((s, i) => s + (i.price * i.qty), 0);
+           
+           if (currentSubtotal > 0) {
+             const ratio = targetSubtotal / currentSubtotal;
+             updatedItems = orig.items.map(item => ({
+               ...item,
+               price: parseFloat((item.price * ratio).toFixed(2))
+             }));
+             
+             // Fix rounding mismatch so it matches exactly
+             const newTotal = updatedItems.reduce((s, i) => s + (i.price * i.qty), 0);
+             const diff = targetSubtotal - newTotal;
+             if (Math.abs(diff) > 0.01 && updatedItems.length > 0) {
+                updatedItems[0].price = parseFloat((updatedItems[0].price + (diff / updatedItems[0].qty)).toFixed(2));
+             }
+           }
         }
 
         const updated = {
            ...orig,
            total: entry.selling,
+           discount: entry.discount,
            paymentMethod: entry.payment_method,
            amountPaid: entry.amountPaid,
            changeAmount: entry.changeAmount,
@@ -256,10 +294,16 @@ export default function SalesLedger() {
            items: updatedItems
         };
         if (window.api) {
-           await window.api.saveSale(updated);
-           const fresh = await window.api.getSales();
-           setLiveSales(fresh);
-           addToast(`Live Sale ${entry.inv} perfectly updated in Database!`, 'success');
+          try {
+            await window.api.saveSale(updated);
+            if (refreshProducts) await refreshProducts();
+            const fresh = await window.api.getSales();
+            setLiveSales(fresh);
+            addToast(`Live Sale ${entry.inv || 'Entry'} perfectly updated!`, 'success');
+          } catch (err) {
+            console.error('Update failed:', err);
+            addToast(`Update Failed: ${err.message}`, 'error');
+          }
         } else {
            setLiveSales(prev => prev.map(s => s.id === realId ? updated : s));
         }
@@ -277,23 +321,48 @@ export default function SalesLedger() {
     }
   };
 
-  const handleDelete = async (id, inv) => {
+  const handleDelete = (id, inv) => {
+    // Instead of native window.confirm, we use our React modal
+    setConfirmDelete({ id, inv });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, inv } = confirmDelete;
+    
+    // Close modal immediately to restore event loop
+    setConfirmDelete(null);
+
     if (String(id).startsWith('live-')) {
       const realId = parseInt(String(id).replace('live-', ''), 10);
-      if (window.confirm(`Are you sure you want to completely delete POS sale ${inv}?\n\nThis will restore all items back to inventory stock.`)) {
+      try {
         if (window.api) {
           await window.api.deleteSale(realId);
+          if (refreshProducts) await refreshProducts();
           setLiveSales(prev => prev.filter(s => s.id !== realId));
           addToast(`POS Sale ${inv} permanently deleted & stock restored!`, 'success');
         } else {
           setLiveSales(prev => prev.filter(s => s.id !== realId));
           addToast(`Browser Mode: Sale ${inv} deleted from UI.`, 'success');
         }
+      } catch (err) {
+        console.error('Delete failed:', err);
+        addToast(`Delete Failed: ${err.message}`, 'error');
       }
-      return;
+    } else {
+      setManualSales(prev => prev.filter(s => s.id !== id));
+      addToast(`${inv || 'Entry'} deleted`, 'warning');
     }
-    setManualSales(prev => prev.filter(s => s.id !== id));
-    addToast(`${inv || 'Entry'} deleted`, 'warning');
+    
+    // CRITICAL: Refocus search bar using a reliable delay.
+    // Since we are now using a React modal, the focus state is preserved
+    // much better than with native dialogs.
+    setTimeout(() => {
+      if (searchRef.current) {
+        searchRef.current.focus();
+        searchRef.current.select();
+      }
+    }, 150);
   };
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
@@ -336,7 +405,11 @@ export default function SalesLedger() {
         <div className={`px-4 py-3.5 border-b flex flex-wrap gap-3 items-center ${dm ? 'border-slate-700' : 'border-slate-100'}`}>
           <div className="flex items-center gap-2 flex-1 min-w-[200px]">
             <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search description or invoice..."
+            <input 
+              ref={searchRef}
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              placeholder="Search description or invoice..."
               className={`flex-1 text-sm outline-none bg-transparent ${dm ? 'text-white placeholder-slate-500' : 'text-slate-800'}`} />
           </div>
           <div className="flex gap-1.5 w-full sm:w-auto overflow-x-auto pb-1.5 sm:pb-0 items-center mt-2 sm:mt-0">
@@ -432,7 +505,32 @@ export default function SalesLedger() {
       </div>
 
       {(modal === 'new' || (modal && modal.id)) && (
-        <SaleModal sale={modal === 'new' ? null : modal} onClose={() => setModal(null)} onSave={handleSave} dm={dm} showFinancials={showFinancials} />
+        <SaleModal 
+          sale={modal === 'new' ? null : modal} 
+          onClose={() => {
+            setModal(null);
+            setTimeout(() => searchRef.current?.focus(), 50);
+          }} 
+          onSave={handleSave} 
+          dm={dm} 
+          showFinancials={showFinancials} 
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Delete Sale Entry"
+          message={`Are you sure you want to delete ${confirmDelete.inv || 'this sale'}? This action will restore stock and cannot be undone.`}
+          onConfirm={executeDelete}
+          onCancel={() => {
+            setConfirmDelete(null);
+            setTimeout(() => searchRef.current?.focus(), 100);
+          }}
+          confirmText="Yes, Delete"
+          cancelText="No, Keep It"
+          dm={darkMode}
+        />
       )}
     </div>
   );

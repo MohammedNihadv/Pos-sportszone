@@ -12,13 +12,17 @@ export default function AuthScreen({ onLogin, savedUsers = [], onLockMode = fals
     if (lockedUser) setSelectedUser(lockedUser);
   }, [lockedUser]);
 
+  const pinRef = useRef(pin);
+  useEffect(() => { pinRef.current = pin; }, [pin]);
+
   // ─── Physical Keyboard Support ───
   useEffect(() => {
     const handler = (e) => {
-      if (e.key >= '0' && e.key <= '9' && pin.length < 4) {
+      const currentPin = pinRef.current;
+      if (e.key >= '0' && e.key <= '9' && currentPin.length < 4) {
         e.preventDefault();
         playSound('tap');
-        const next = pin + e.key;
+        const next = currentPin + e.key;
         setPin(next);
         setError(false);
         checkPin(next);
@@ -36,7 +40,7 @@ export default function AuthScreen({ onLogin, savedUsers = [], onLockMode = fals
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [pin, selectedUser]);
+  }, [selectedUser]); // Removed pin from dependencies to keep listener stable
 
   const checkPin = (newPin) => {
     if (newPin.length === 4) {

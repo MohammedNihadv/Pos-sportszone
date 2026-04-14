@@ -9,7 +9,8 @@ import getDb, {
   getUsers, updateUserPin, saveUser,
   getCustomers, saveCustomer, deleteCustomer,
   getCredits, saveCredit, deleteCredit,
-  clearAuditLogs, updateCustomerStats
+  clearAuditLogs, updateCustomerStats,
+  runAggressiveMigrations
 } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
 import { createBackup, restoreBackup, getBackups, autoBackup, openBackupFolder, restoreFromCustomFile } from './backup.js';
@@ -319,33 +320,53 @@ safeHandle('get-products', () => {
 
 const handleSaveProduct = async (_, p) => {
   const db = getDb();
-  if (p.id) {
-    db.prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
-      .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, p.id);
-    logAudit('Updated Product', `Product updated: ${p.name} (SKU: ${p.sku})`);
-    return p;
-  } else {
-    // Check for existing (including deleted) by SKU
-    const existing = db.prepare('SELECT id, is_deleted FROM products WHERE LOWER(sku) = LOWER(?)').get(String(p.sku || '').trim());
-    if (existing) {
-      db.prepare('UPDATE products SET name=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
-        .run(p.name, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, existing.id);
-      logAudit('Updated Product (Restored/Sync)', `Product SKU ${p.sku} re-activated/synced`);
-      return { ...p, id: existing.id };
-    }
-    
-    // Check if name already exists (including deleted) to prevent name collisions
-    const existingName = db.prepare('SELECT id FROM products WHERE LOWER(name) = LOWER(?)').get(p.name.trim());
-    if (existingName) {
-      db.prepare('UPDATE products SET sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0 WHERE id=?')
-        .run(p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji, existingName.id);
-      return { ...p, id: existingName.id };
-    }
+  logInfo('IPC:save-product', `Updating/Adding product: ${p.name} (ID: ${p.id || 'NEW'})`);
+  
+  const saveAction = () => {
+    if (p.id) {
+      const res = db.prepare('UPDATE products SET name=?, sku=?, barcode=?, price=?, cost=?, stock=?, category=?, emoji=?, is_deleted = 0, updated_at = CURRENT_TIMESTAMP WHERE id=?')
+        .run(
+          p.name, 
+          p.sku, 
+          p.barcode, 
+          parseFloat(p.price) || 0, 
+          parseFloat(p.cost) || 0, 
+          parseInt(p.stock) || 0, 
+          p.category, 
+          p.emoji, 
+          p.id
+        );
+      
+      if (res.changes === 0) {
+        throw new Error(`Product update failed: No product with ID ${p.id} found.`);
+      }
 
-    const info = db.prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(p.name, p.sku, p.barcode, p.price, p.cost, p.stock, p.category, p.emoji);
-    logAudit('Added Product', `New product created: ${p.name} (Price: ${p.price})`);
-    return { ...p, id: info.lastInsertRowid };
+      logAudit('Updated Product', `Product updated: ${p.name} (SKU: ${p.sku})`);
+      return p;
+    } else {
+      // Create new
+      const info = db.prepare('INSERT INTO products (name, sku, barcode, price, cost, stock, category, emoji, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)')
+        .run(p.name, p.sku, p.barcode || '', parseFloat(p.price) || 0, parseFloat(p.cost) || 0, parseInt(p.stock) || 0, p.category, p.emoji);
+      return { ...p, id: info.lastInsertRowid };
+    }
+  };
+
+  try {
+    return saveAction();
+  } catch (err) {
+    if (err.message.includes('column') && err.message.includes('updated_at')) {
+      logInfo('SelfRepair', 'Missing updated_at column detected in Product save. Repairing...');
+      try {
+        db.exec("ALTER TABLE products ADD COLUMN updated_at TEXT");
+        db.exec("UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE products ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return saveAction(); // Retry after repair
+      } catch (repairErr) {
+        logError('SelfRepairFailed', repairErr);
+      }
+    }
+    logError('SaveProductHandler', err);
+    throw err;
   }
 };
 
@@ -353,10 +374,26 @@ safeHandle('save-product', handleSaveProduct);
 safeHandle('add-product', handleSaveProduct);
 safeHandle('update-product', handleSaveProduct);
 safeHandle('delete-product', (_, id) => {
-  const p = getDb().prepare('SELECT name FROM products WHERE id=?').get(id);
-  getDb().prepare('UPDATE products SET is_deleted = 1 WHERE id=?').run(id);
-  if (p) logAudit('Deleted Product', `Product deleted: ${p.name}`);
-  return true;
+  const db = getDb();
+  const repairAndExecute = () => {
+    const p = db.prepare('SELECT name FROM products WHERE id=?').get(id);
+    db.prepare('UPDATE products SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id=?').run(id);
+    if (p) logAudit('Deleted Product', `Product deleted: ${p.name}`);
+    return true;
+  };
+  try {
+    return repairAndExecute();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE products ADD COLUMN updated_at TEXT");
+        db.exec("UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE products ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return repairAndExecute(); 
+      } catch(e){ logError('EmergencyRepair:ProductDelete', e); }
+    }
+    throw err;
+  }
 });
 
 // ─── IPC: Expense Categories ───
@@ -391,19 +428,50 @@ safeHandle('save-sale', (_, sale) => {
   const saleDate = sale.date || new Date().toISOString();
   
   const transaction = db.transaction((s) => {
+    const updateStock = db.prepare('UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const deductStock = db.prepare('UPDATE products SET stock = stock - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+
     if (s.id) {
-      db.prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=?, date=? WHERE id=?')
+      // 1. Get OLD items to restore stock
+      const oldSale = db.prepare('SELECT items FROM sales WHERE id = ?').get(s.id);
+      if (oldSale) {
+        try {
+          const oldItems = JSON.parse(oldSale.items || '[]');
+          if (Array.isArray(oldItems)) {
+            oldItems.forEach(item => {
+              if (item.id && !String(item.id).startsWith('manual')) {
+                updateStock.run(item.qty, item.id);
+              }
+            });
+          }
+        } catch (e) { logError('RestoreStockEdit', e); }
+      }
+
+      // 2. Update the Sale
+      db.prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=?, date=?, updated_at = CURRENT_TIMESTAMP WHERE id=?')
         .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.id);
-      logAudit('Updated Sale', `Sale ID ${s.id} updated (Method: ${s.paymentMethod})`);
+      
+      // 3. Deduct stock for NEW items
+      if (s.items && Array.isArray(s.items)) {
+        s.items.forEach(item => {
+          if (item.id && !String(item.id).startsWith('manual')) {
+            deductStock.run(item.qty, item.id);
+          }
+        });
+      }
+
+      logAudit('Updated Sale', `Sale ID ${s.id} updated and stock adjusted.`);
       return { id: s.id };
     } else {
+      // New Sale logic
       const info = db.prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method, date, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.customerId || null);
 
-      const updateStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
       if (s.items && Array.isArray(s.items)) {
         s.items.forEach(item => {
-          updateStock.run(item.qty, item.id);
+          if (item.id && !String(item.id).startsWith('manual')) {
+            deductStock.run(item.qty, item.id);
+          }
         });
       }
 
@@ -418,10 +486,21 @@ safeHandle('save-sale', (_, sale) => {
   });
 
   try {
-    return transaction(sale);
+    const result = transaction(sale);
+    runFullSync(getDb()).catch(err => logError('RealtimeSync:Sale', err));
+    return result;
   } catch (err) {
+    if (err.message.includes('column') && err.message.includes('updated_at')) {
+       logInfo('SelfRepair:Sale', 'Missing updated_at column in Sales save. Repairing...');
+       try { 
+         db.exec("ALTER TABLE sales ADD COLUMN updated_at TEXT");
+         db.exec("UPDATE sales SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+         db.exec("ALTER TABLE sales ADD COLUMN is_deleted INTEGER DEFAULT 0");
+         return transaction(sale);
+       } catch(e){ logError('SelfRepairFailed:Sale', e); }
+    }
     logError('SaveSaleTransaction', err);
-    throw err; // Ensure the frontend sees the error
+    throw err;
   }
 });
 
@@ -456,21 +535,53 @@ safeHandle('get-sales', () => {
   }
 });
 
-safeHandle('delete-sale', (_, id) => {
-  const sale = getDb().prepare('SELECT * FROM sales WHERE id = ?').get(id);
-  if (!sale) return false;
+safeHandle('delete-sale', async (_, id) => {
+  const db = getDb();
+  
+  const deleteAction = () => {
+    const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
+    if (!sale) return false;
+    if (sale.is_deleted === 1) return true;
 
-  const items = JSON.parse(sale.items);
-  const restoreStock = getDb().prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+    const items = JSON.parse(sale.items || '[]');
+    const restoreStock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
 
-  const transaction = getDb().transaction(() => {
-    items.forEach(item => restoreStock.run(item.qty, item.id));
-    getDb().prepare('UPDATE sales SET is_deleted = 1 WHERE id = ?').run(id);
-  });
+    const transaction = db.transaction(() => {
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          if (item.id && !String(item.id).startsWith('manual')) {
+            restoreStock.run(item.qty, item.id);
+          }
+        });
+      }
+      db.prepare('UPDATE sales SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    });
 
-  transaction();
-  logAudit('Deleted Sale', `Sale ID ${id} deleted (Total: ${sale.total})`);
-  return true;
+    transaction();
+    logAudit('Deleted Sale', `Sale ID ${id} deleted and stock restored.`);
+    return true;
+  };
+
+  try {
+    const result = deleteAction();
+    if (result) {
+      // Trigger cloud sync so other devices see the deletion
+      runFullSync(db).catch(err => logError('RealtimeSync:SaleDelete', err));
+    }
+    return result;
+  } catch (err) {
+    if (err.message.includes('updated_at') || err.message.includes('is_deleted')) {
+       try { 
+         db.exec("ALTER TABLE sales ADD COLUMN updated_at TEXT");
+         db.exec("UPDATE sales SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+         db.exec("ALTER TABLE sales ADD COLUMN is_deleted INTEGER DEFAULT 0");
+         const res = deleteAction();
+         if (res) runFullSync(db).catch(err => logError('RealtimeSync:SaleDelete', err));
+         return res;
+       } catch(e){ logError('EmergencyRepair:SaleDelete', e); }
+    }
+    throw err;
+  }
 });
 
 // ─── IPC: Expenses ───
@@ -479,14 +590,44 @@ safeHandle('get-expenses', () => {
 });
 
 safeHandle('save-expense', (_, e) => {
-  const info = getDb().prepare('INSERT INTO expenses (date, category, description, amount, payment_method) VALUES (?, ?, ?, ?, ?)')
-    .run(e.date, e.category, e.description, e.amount, e.paymentMethod);
-  return { id: info.lastInsertRowid };
+  const db = getDb();
+  const saveAction = () => {
+    const info = db.prepare('INSERT INTO expenses (date, category, description, amount, payment_method, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)')
+      .run(e.date, e.category, e.description, e.amount, e.paymentMethod);
+    return { id: info.lastInsertRowid };
+  };
+  try {
+    return saveAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE expenses ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE expenses SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        return saveAction(); 
+      } catch(e){}
+    }
+    throw err;
+  }
 });
 
 safeHandle('delete-expense', (_, id) => {
-  getDb().prepare('UPDATE expenses SET is_deleted = 1 WHERE id=?').run(id);
-  return true;
+  const db = getDb();
+  const deleteAction = () => {
+    db.prepare('UPDATE expenses SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id=?').run(id);
+    return true;
+  };
+  try {
+    return deleteAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE expenses ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE expenses SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        return deleteAction(); 
+      } catch(e){}
+    }
+    throw err;
+  }
 });
 
 // ─── IPC: Purchases ───
@@ -499,14 +640,44 @@ safeHandle('get-purchases', () => {
 });
 
 safeHandle('save-purchase', (_, p) => {
-  const info = getDb().prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method, payment_breakdown) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod, p.paymentBreakdown ? JSON.stringify(p.paymentBreakdown) : null);
-  return { id: p.id || info.lastInsertRowid };
+  const db = getDb();
+  const saveAction = () => {
+    const info = db.prepare('INSERT OR REPLACE INTO purchases (id, date, supplier, invoice, items_count, total, paid, status, payment_method, payment_breakdown, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)')
+      .run(p.id, p.date, p.supplier, p.invoice, p.items, p.total, p.paid, p.status, p.paymentMethod, p.paymentBreakdown ? JSON.stringify(p.paymentBreakdown) : null);
+    return { id: p.id || info.lastInsertRowid };
+  };
+  try {
+    return saveAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE purchases ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE purchases SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        return saveAction(); 
+      } catch(e){}
+    }
+    throw err;
+  }
 });
 
 safeHandle('delete-purchase', (_, id) => {
-  getDb().prepare('UPDATE purchases SET is_deleted = 1 WHERE id=?').run(id);
-  return true;
+  const db = getDb();
+  const deleteAction = () => {
+    db.prepare('UPDATE purchases SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id=?').run(id);
+    return true;
+  };
+  try {
+    return deleteAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE purchases ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE purchases SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        return deleteAction(); 
+      } catch(e){}
+    }
+    throw err;
+  }
 });
 
 // ─── IPC: Categories ───
@@ -550,7 +721,7 @@ safeHandle('save-supplier', (_, s) => {
   // Check for existing including deleted
   const existing = db.prepare('SELECT id FROM suppliers WHERE LOWER(name) = LOWER(?)').get(s.name.trim());
   if (existing) {
-    db.prepare('UPDATE suppliers SET phone=?, email=?, address?, is_deleted=0 WHERE id=?')
+    db.prepare('UPDATE suppliers SET phone=?, email=?, address=?, is_deleted=0 WHERE id=?')
       .run(s.phone || null, s.email || null, s.address || null, existing.id);
     return { ...s, id: existing.id };
   }

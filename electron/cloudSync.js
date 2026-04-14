@@ -44,6 +44,7 @@ async function syncSales(db) {
     change_amount: r.change_amount || 0,
     payment_breakdown: r.payment_breakdown || null, // JSON string
     change_return_method: r.change_return_method || null,
+    updated_at: r.updated_at || new Date().toISOString(),
     is_deleted: r.is_deleted || 0
   }));
 
@@ -68,6 +69,7 @@ async function syncExpenses(db) {
     description: r.description || '',
     amount: r.amount,
     payment_method: r.payment_method || 'cash',
+    updated_at: r.updated_at || new Date().toISOString(),
     is_deleted: r.is_deleted || 0
   }));
 
@@ -95,6 +97,7 @@ async function syncProducts(db) {
     stock: r.stock || 0,
     category: r.category || '',
     emoji: r.emoji || '📦',
+    updated_at: r.updated_at || new Date().toISOString(),
     is_deleted: r.is_deleted || 0
   }));
 
@@ -305,18 +308,7 @@ export async function runFullSync(db, role = 'Staff') {
   ];
 
 
-  // 1. Pull from cloud (Always do this first)
-  // This ensures local dummy data is overwritten by real cloud data before we push anything.
-  try {
-    logInfo('CloudSync:PullPhase', `Refreshing local data from cloud for ${role}...`);
-    const pullRes = await pullFromCloud(db);
-    results.pulled = pullRes.pulled;
-    if (!pullRes.success) results.errors.push(...pullRes.errors);
-  } catch (err) {
-    logError('CloudSync:PullPhase', err);
-  }
-
-  // 2. Push to cloud (Only if NOT Owner)
+  // 1. Push to cloud (Only if NOT Owner)
   // Owners are pure viewers and should never push local state/dummy data
   if (role !== 'Owner') {
     for (const task of syncTasks) {
@@ -328,6 +320,17 @@ export async function runFullSync(db, role = 'Staff') {
         logError(`CloudSync:${task.name}`, err);
       }
     }
+  }
+
+  // 2. Pull from cloud (Always do this second)
+  // We push first so our local changes (like deletions) reach Supabase before we refresh.
+  try {
+    logInfo('CloudSync:PullPhase', `Refreshing local data from cloud for ${role}...`);
+    const pullRes = await pullFromCloud(db);
+    results.pulled = pullRes.pulled;
+    if (!pullRes.success) results.errors.push(...pullRes.errors);
+  } catch (err) {
+    logError('CloudSync:PullPhase', err);
   }
 
   // Mark success if no errors
@@ -379,9 +382,44 @@ export async function pullFromCloud(db) {
       const colNames = columns.map(c => c === 'local_id' ? 'id' : c).join(', ');
 
       const upsertStmt = db.prepare(`INSERT OR REPLACE INTO ${t.local} (${colNames}) VALUES (${placeholders})`);
+      const getExisting = (validLocalColumns.has('is_deleted') || validLocalColumns.has('updated_at'))
+        ? db.prepare(`SELECT is_deleted, updated_at FROM ${t.local} WHERE id = ?`)
+        : null;
 
       const transaction = db.transaction((rows) => {
         for (const row of rows) {
+          const rowId = row.local_id || row.id;
+          
+          if (getExisting && rowId) {
+            const localRow = getExisting.get(rowId);
+            if (localRow) {
+               // Protection 1: If local is already deleted, don't let cloud overwrite it
+               if (localRow.is_deleted === 1 && (row.is_deleted === 0 || row.is_deleted === null)) {
+                 continue; 
+               }
+               // Protection 2: Latest Wins Conflict Resolution
+               // If local has a NEWER updated_at, don't let older cloud overwrite it.
+               // This prevents sync from "undoing" local edits.
+                if (localRow.updated_at && row.updated_at) {
+                  // Robust parsing of SQLite timestamps (YYYY-MM-DD HH:MM:SS) to UTC epoch
+                  const parseTS = (ts) => {
+                    if (!ts) return 0;
+                    // Standardize to ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)
+                    const iso = String(ts).trim().replace(' ', 'T').replace('Z', '') + 'Z';
+                    const d = new Date(iso);
+                    return isNaN(d.getTime()) ? 0 : d.getTime();
+                  };
+
+                  const localTime = parseTS(localRow.updated_at);
+                  const cloudTime = parseTS(row.updated_at);
+                  
+                  if (localTime > cloudTime) {
+                    continue; // Local is newer, preserve it
+                  }
+                }
+            }
+          }
+
           const vals = columns.map(c => {
             const val = row[c];
             if (typeof val === 'boolean') return val ? 1 : 0;

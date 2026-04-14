@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import { logError, logInfo } from './logger.js';
 
 const isDev = !app.isPackaged;
 
@@ -13,12 +14,70 @@ function getDbPath() {
     : path.join(app.getPath('userData'), 'shop.db');
 }
 
+export function runAggressiveMigrations() {
+  const database = getDb();
+  logInfo('Migration', 'Running aggressive schema synchronization...');
+  const migrationTables = ['products', 'sales', 'expenses', 'purchases', 'customers', 'credits', 'categories', 'suppliers', 'users', 'expense_categories'];
+  
+  migrationTables.forEach(t => {
+    try {
+      const info = database.prepare(`PRAGMA table_info(${t})`).all();
+      if (info.length === 0) return; // Table not created yet
+      
+      const hasUpdatedAt = info.some(col => col.name === 'updated_at');
+      if (!hasUpdatedAt) {
+        database.exec(`ALTER TABLE ${t} ADD COLUMN updated_at TEXT`);
+        database.exec(`UPDATE ${t} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL`);
+        logInfo('Migration', `Added updated_at to ${t}`);
+      }
+      const hasIsDeleted = info.some(col => col.name === 'is_deleted');
+      if (!hasIsDeleted) {
+        database.exec(`ALTER TABLE ${t} ADD COLUMN is_deleted INTEGER DEFAULT 0`);
+        logInfo('Migration', `Added is_deleted to ${t}`);
+      }
+    } catch (e) {
+      logError(`Aggressive Migration Failed for ${t}`, e);
+      throw e; // Rethrow to let the UI catch it
+    }
+  });
+}
+
 // Initialize Schema
 export function initDb() {
   if (!db) {
     db = new Database(getDbPath());
     db.pragma('journal_mode = WAL');
   }
+
+  // AGGRESSIVE MIGRATION: Ensure updated_at exists on ALL critical tables FIRST
+  try {
+    runAggressiveMigrations();
+  } catch (e) {
+    logError('Startup Migration Failed', e);
+  }
+
+  // Column ensuring helper for other columns
+  const addColumnIfNotExists = (table, column, typeRaw) => {
+    try {
+      const info = db.prepare(`PRAGMA table_info(${table})`).all();
+      const exists = info.some(col => col.name === column);
+      if (!exists) {
+        // SQLite doesn't allow ALTER TABLE ... ADD COLUMN ... DEFAULT CURRENT_TIMESTAMP 
+        // if rows already exist (non-constant default). We catch this by splitting it.
+        if (typeRaw.toUpperCase().includes('DEFAULT CURRENT_TIMESTAMP')) {
+          const typeOnly = typeRaw.toUpperCase().replace('DEFAULT CURRENT_TIMESTAMP', '').trim();
+          db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeOnly}`);
+          db.exec(`UPDATE ${table} SET ${column} = CURRENT_TIMESTAMP WHERE ${column} IS NULL`);
+          logInfo('Migration', `Added ${column} to ${table} with split-timestamp fix`);
+        } else {
+          db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeRaw}`);
+          logInfo('Migration', `Added ${column} to ${table}`);
+        }
+      }
+    } catch (err) {
+      logError(`Migration Helper Failed for ${table}.${column}`, err);
+    }
+  };
   // Products table
   db.prepare(`
     CREATE TABLE IF NOT EXISTS products (
@@ -30,7 +89,8 @@ export function initDb() {
       cost REAL DEFAULT 0,
       stock INTEGER DEFAULT 0,
       category TEXT,
-      emoji TEXT
+      emoji TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 
@@ -42,11 +102,8 @@ export function initDb() {
     )
   `).run();
 
-  // Migration: Add barcode if it doesn't exist (using try/catch for safety)
-  try {
-    db.prepare("ALTER TABLE products ADD COLUMN barcode TEXT DEFAULT ''").run();
-    // Column already exists or table is new
-  } catch (e) { /* ignore */ }
+  addColumnIfNotExists('products', 'barcode', "TEXT DEFAULT ''");
+  addColumnIfNotExists('products', 'updated_at', "TEXT DEFAULT CURRENT_TIMESTAMP");
 
   // Sales table
   db.prepare(`
@@ -61,11 +118,11 @@ export function initDb() {
     )
   `).run();
 
-  // Migration: Add tender and change tracking
-  try { db.prepare("ALTER TABLE sales ADD COLUMN amount_paid REAL DEFAULT 0").run(); } catch(e){ /* ignore */ }
-  try { db.prepare("ALTER TABLE sales ADD COLUMN change_amount REAL DEFAULT 0").run(); } catch(e){ /* ignore */ }
-  try { db.prepare("ALTER TABLE sales ADD COLUMN payment_breakdown JSON").run(); } catch(e){ /* ignore */ }
-  try { db.prepare("ALTER TABLE sales ADD COLUMN change_return_method TEXT").run(); } catch(e){ /* ignore */ }
+  addColumnIfNotExists('sales', 'amount_paid', "REAL DEFAULT 0");
+  addColumnIfNotExists('sales', 'change_amount', "REAL DEFAULT 0");
+  addColumnIfNotExists('sales', 'payment_breakdown', "JSON");
+  addColumnIfNotExists('sales', 'change_return_method', "TEXT");
+  addColumnIfNotExists('sales', 'updated_at', "TEXT DEFAULT CURRENT_TIMESTAMP");
 
   // Expenses table
   db.prepare(`
@@ -189,17 +246,13 @@ export function initDb() {
     )
   `).run();
 
-  // Add machine_id and hostname to tables
+  // Add machine_id, hostname, and updated_at to all sync tables
   const syncTables = ['sales', 'expenses', 'products', 'purchases', 'customers', 'credits', 'audit_logs', 'users', 'categories', 'suppliers', 'expense_categories'];
   syncTables.forEach(t => {
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN machine_id TEXT`).run(); } catch(e){}
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN hostname TEXT`).run(); } catch(e){}
-  });
-
-  // Soft Delete Migrations (Phase 15)
-  const softDeleteTables = ['products', 'expense_categories', 'sales', 'expenses', 'purchases', 'categories', 'suppliers', 'users', 'customers', 'credits'];
-  softDeleteTables.forEach(t => {
-    try { db.prepare(`ALTER TABLE ${t} ADD COLUMN is_deleted INTEGER DEFAULT 0`).run(); } catch(e){}
+    addColumnIfNotExists(t, 'machine_id', "TEXT");
+    addColumnIfNotExists(t, 'hostname', "TEXT");
+    addColumnIfNotExists(t, 'updated_at', "TEXT DEFAULT CURRENT_TIMESTAMP");
+    addColumnIfNotExists(t, 'is_deleted', "INTEGER DEFAULT 0");
   });
 
   // Seed default users if empty
@@ -409,35 +462,51 @@ export function getCustomers() {
 
 export function saveCustomer(c) {
   const db = getDb();
-  // 1. If we have an ID, it's a direct update
-  if (c.id) {
-    db.prepare('UPDATE customers SET name = ?, phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
-      .run(c.name, c.phone, c.email, c.orders || 0, c.total || 0, c.last_order || null, c.id);
-    return c.id;
-  }
-  
-  // 2. Check for existing (including deleted) by phone
-  if (c.phone) {
-    const existing = db.prepare('SELECT id, is_deleted FROM customers WHERE phone = ?').get(c.phone);
-    if (existing) {
-      db.prepare('UPDATE customers SET name = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
-        .run(c.name, c.email, c.orders || 0, c.total || 0, c.last_order || null, existing.id);
-      return existing.id;
+  const saveAction = () => {
+    // 1. If we have an ID, it's a direct update
+    if (c.id) {
+      db.prepare('UPDATE customers SET name = ?, phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(c.name, c.phone, c.email, c.orders || 0, c.total || 0, c.last_order || null, c.id);
+      return c.id;
     }
-  }
+    
+    // 2. Check for existing (including deleted) by phone
+    if (c.phone) {
+      const existing = db.prepare('SELECT id, is_deleted FROM customers WHERE phone = ?').get(c.phone);
+      if (existing) {
+        db.prepare('UPDATE customers SET name = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(c.name, c.email, c.orders || 0, c.total || 0, c.last_order || null, existing.id);
+        return existing.id;
+      }
+    }
 
-  // 3. Check for existing (including deleted) by name
-  const existingByName = db.prepare('SELECT id, is_deleted FROM customers WHERE name = ?').get(c.name);
-  if (existingByName) {
-    db.prepare('UPDATE customers SET phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0 WHERE id = ?')
-      .run(c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null, existingByName.id);
-    return existingByName.id;
-  }
+    // 3. Check for existing (including deleted) by name
+    const existingByName = db.prepare('SELECT id, is_deleted FROM customers WHERE name = ?').get(c.name);
+    if (existingByName) {
+      db.prepare('UPDATE customers SET phone = ?, email = ?, orders = ?, total = ?, last_order = ?, is_deleted = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null, existingByName.id);
+      return existingByName.id;
+    }
 
-  // 4. New customer
-  const info = db.prepare('INSERT INTO customers (name, phone, email, orders, total, last_order) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(c.name, c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null);
-  return info.lastInsertRowid;
+    // 4. New customer
+    const info = db.prepare('INSERT INTO customers (name, phone, email, orders, total, last_order) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(c.name, c.phone || '', c.email || '', c.orders || 0, c.total || 0, c.last_order || null);
+    return info.lastInsertRowid;
+  };
+
+  try {
+    return saveAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE customers ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE customers SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE customers ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return saveAction(); 
+      } catch(e){ logError('EmergencyRepair:CustomerSave', e); }
+    }
+    throw err;
+  }
 }
 
 export function updateCustomerStats(nameOrId, amount, date) {
@@ -454,14 +523,31 @@ export function updateCustomerStats(nameOrId, amount, date) {
       UPDATE customers 
       SET orders = orders + 1, 
           total = total + ?, 
-          last_order = ? 
+          last_order = ?,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(amount, date, customer.id);
   }
 }
 
 export function deleteCustomer(id) {
-  return getDb().prepare('UPDATE customers SET is_deleted = 1 WHERE id = ?').run(id);
+  const db = getDb();
+  const deleteAction = () => {
+    return db.prepare('UPDATE customers SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  };
+  try {
+    return deleteAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE customers ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE customers SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE customers ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return deleteAction(); 
+      } catch(e){ logError('EmergencyRepair:CustomerDelete', e); }
+    }
+    throw err;
+  }
 }
 
 // Credit Methods
@@ -470,16 +556,49 @@ export function getCredits() {
 }
 
 export function saveCredit(cr) {
-  if (cr.id) {
-    return getDb().prepare('UPDATE credits SET customer_id=?, customer_name=?, total=?, paid=?, pending=?, items=? WHERE id=?')
-      .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.items, cr.id);
+  const db = getDb();
+  const saveAction = () => {
+    if (cr.id) {
+      return db.prepare('UPDATE credits SET customer_id=?, customer_name=?, total=?, paid=?, pending=?, items=?, updated_at = CURRENT_TIMESTAMP WHERE id=?')
+        .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.items, cr.id);
+    }
+    return db.prepare('INSERT INTO credits (customer_id, customer_name, total, paid, pending, date, items) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.date || new Date().toISOString().split('T')[0], cr.items);
+  };
+
+  try {
+    return saveAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE credits ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE credits SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE credits ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return saveAction(); 
+      } catch(e){ logError('EmergencyRepair:CreditSave', e); }
+    }
+    throw err;
   }
-  return getDb().prepare('INSERT INTO credits (customer_id, customer_name, total, paid, pending, date, items) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(cr.customer_id, cr.customer_name, cr.total, cr.paid, cr.pending, cr.date || new Date().toISOString().split('T')[0], cr.items);
 }
 
 export function deleteCredit(id) {
-  return getDb().prepare('UPDATE credits SET is_deleted = 1 WHERE id = ?').run(id);
+  const db = getDb();
+  const deleteAction = () => {
+    return db.prepare('UPDATE credits SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  };
+  try {
+    return deleteAction();
+  } catch (err) {
+    if (err.message.includes('updated_at')) {
+      try { 
+        db.exec("ALTER TABLE credits ADD COLUMN updated_at TEXT"); 
+        db.exec("UPDATE credits SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
+        db.exec("ALTER TABLE credits ADD COLUMN is_deleted INTEGER DEFAULT 0");
+        return deleteAction(); 
+      } catch(e){ logError('EmergencyRepair:CreditDelete', e); }
+    }
+    throw err;
+  }
 }
 
 // Remote Commands

@@ -23,11 +23,10 @@ export function useAutoLock() {
     setIsWarning(false);
     setTimeLeft(warningSeconds);
 
-    if (isLocked || !autoLockEnabled || !currentUser || currentUser.role !== 'Cashier') return; // Only track for Cashier
+    if (isLocked || !autoLockEnabled || !currentUser || currentUser.role !== 'Cashier') return; 
+    if (!autoLockTimeout || autoLockTimeout <= 0 || isNaN(autoLockTimeout)) return; // Safety: Do not lock if timeout is invalid
 
     const msUntilWarning = (autoLockTimeout * 60 - warningSeconds) * 1000;
-    
-    // Safety check just in case timeout is less than warning
     const safeMs = Math.max(0, msUntilWarning);
 
     warningTimerRef.current = setTimeout(() => {

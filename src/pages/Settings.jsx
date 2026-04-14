@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Store, Printer, Shield, RefreshCw, Moon, Sun, Upload, Plus, Trash2, Tag, Users, LogOut, Volume2, Save, Box, Receipt, Truck, X, Database, Download, Calculator, Lock } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useApp } from '../context/AppContext';
 
 const MasterLock = () => (
@@ -30,6 +31,7 @@ export default function Settings() {
   const [newCat, setNewCat] = useState('');
   const [newExpCat, setNewExpCat] = useState('');
   const [newSup, setNewSup] = useState('');
+  const [confirmAction, setConfirmAction] = useState(null); // { type, id, title, message }
 
   const dm = darkMode;
 
@@ -54,6 +56,10 @@ export default function Settings() {
     if (!newCat.trim()) return;
     if (window.api) {
       const saved = await window.api.saveCategory({ name: newCat });
+      if (saved && saved.error) {
+        addToast(saved.error, 'error');
+        return;
+      }
       if (saved) setCategories(prev => [...prev, saved]);
     } else {
       setCategories(prev => [...prev, { id: Date.now(), name: newCat }]);
@@ -62,12 +68,13 @@ export default function Settings() {
     addToast('Category added', 'success');
   };
 
-  const handleDeleteCategory = async (id) => {
-    if (window.confirm("Are you sure you want to delete this category?")) {
-      if (window.api) await window.api.deleteCategory(id);
-      setCategories(prev => prev.filter(c => c.id !== id));
-      addToast('Category removed', 'warning');
-    }
+  const handleDeleteCategory = (id) => {
+    setConfirmAction({
+      type: 'category',
+      id,
+      title: 'Delete Category',
+      message: 'Are you sure you want to delete this category? This might affect products categorized under it.'
+    });
   };
 
   // Expense Category Management
@@ -75,6 +82,10 @@ export default function Settings() {
     if (!newExpCat.trim()) return;
     if (window.api) {
       const saved = await window.api.saveExpenseCategory({ name: newExpCat });
+      if (saved && saved.error) {
+        addToast(saved.error, 'error');
+        return;
+      }
       if (saved) setExpenseCategories(prev => [...prev, saved]);
     } else {
       setExpenseCategories(prev => [...prev, { id: Date.now(), name: newExpCat }]);
@@ -83,12 +94,13 @@ export default function Settings() {
     addToast('Expense category added', 'success');
   };
 
-  const handleDeleteExpCategory = async (id) => {
-    if (window.confirm("Delete this expense category?")) {
-      if (window.api) await window.api.deleteExpenseCategory(id);
-      setExpenseCategories(prev => prev.filter(c => c.id !== id));
-      addToast('Expense category removed', 'warning');
-    }
+  const handleDeleteExpCategory = (id) => {
+    setConfirmAction({
+      type: 'expCategory',
+      id,
+      title: 'Delete Expense Category',
+      message: 'Are you sure you want to delete this expense category?'
+    });
   };
 
   // Supplier Management
@@ -97,6 +109,10 @@ export default function Settings() {
     const supData = { name: newSup, phone: '' };
     if (window.api) {
       const saved = await window.api.saveSupplier(supData);
+      if (saved && saved.error) {
+        addToast(saved.error, 'error');
+        return;
+      }
       if (saved) setSuppliers(prev => [...prev, saved]);
     } else {
       setSuppliers(prev => [...prev, { ...supData, id: Date.now() }]);
@@ -105,11 +121,37 @@ export default function Settings() {
     addToast('Supplier added', 'success');
   };
 
-  const handleDeleteSupplier = async (id) => {
-    if (window.confirm("Delete this supplier?")) {
+  const handleDeleteSupplier = (id) => {
+    setConfirmAction({
+      type: 'supplier',
+      id,
+      title: 'Delete Supplier',
+      message: 'Are you sure you want to delete this supplier?'
+    });
+  };
+
+  const executeConfirmAction = async () => {
+    if (!confirmAction) return;
+    const { type, id } = confirmAction;
+    setConfirmAction(null);
+
+    if (type === 'category') {
+      if (window.api) await window.api.deleteCategory(id);
+      setCategories(prev => prev.filter(c => c.id !== id));
+      addToast('Category removed', 'warning');
+    } else if (type === 'expCategory') {
+      if (window.api) await window.api.deleteExpenseCategory(id);
+      setExpenseCategories(prev => prev.filter(c => c.id !== id));
+      addToast('Expense category removed', 'warning');
+    } else if (type === 'supplier') {
       if (window.api) await window.api.deleteSupplier(id);
       setSuppliers(prev => prev.filter(s => s.id !== id));
       addToast('Supplier removed', 'warning');
+    } else if (type === 'clearLogs') {
+      if (window.api?.clearAuditLogs) {
+        await window.api.clearAuditLogs();
+        addToast('Audit trail cleared on this device and cloud', 'success');
+      }
     }
   };
 
@@ -543,15 +585,12 @@ export default function Settings() {
                 </div>
                 <button
                   disabled={!isAdminUnlocked}
-                  onClick={async () => {
-                    if (window.confirm("CRITICAL ACTION: This will permanently delete all local and cloud audit logs. Proceed?")) {
-                      if (window.api?.clearAuditLogs) {
-                        await window.api.clearAuditLogs();
-                        addToast('Audit trail cleared on this device and cloud', 'success');
-                      } else {
-                        addToast('Clear Audit unavailable in browser mode', 'warning');
-                      }
-                    }
+                  onClick={() => {
+                    setConfirmAction({
+                      type: 'clearLogs',
+                      title: 'Clear Audit Trail',
+                      message: 'CRITICAL ACTION: This will permanently delete all local and cloud audit logs. This cannot be undone. Proceed?'
+                    });
                   }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 flex items-center gap-2
                     ${isAdminUnlocked ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'}`}
@@ -656,6 +695,17 @@ export default function Settings() {
           </button>
         </div>
       </div>
+
+      {confirmAction && (
+        <ConfirmModal
+          isOpen={!!confirmAction}
+          title={confirmAction.title}
+          message={confirmAction.message}
+          onConfirm={executeConfirmAction}
+          onCancel={() => setConfirmAction(null)}
+          dm={dm}
+        />
+      )}
     </div>
   );
 }

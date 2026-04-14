@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, Database, HardDrive, Clock, Wifi, WifiOff, Shield, Terminal, RefreshCw, Download, FolderOpen, Upload, Cloud, CloudOff, CheckCircle, ArrowUpCircle } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { useApp } from '../context/AppContext';
 
 export default function SystemHealth() {
@@ -17,6 +18,7 @@ export default function SystemHealth() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [dbHealth, setDbHealth] = useState({ success: true });
   const [recovering, setRecovering] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // { type, payload, title, message }
 
   async function loadData() {
     if (!window.api) return setLoading(false);
@@ -86,48 +88,69 @@ export default function SystemHealth() {
   }
 
   async function handleRestore(backupPath, name) {
-    if (!window.confirm(`⚠️ WARNING: Restore from "${name}"?\n\nThis will OVERWRITE your current database with data from this backup. If you made sales TODAY, please ensure you "Sync Now" to the Cloud first to avoid losing them!\n\nThe app will restart after restoring.`)) return;
-    try {
-      const result = await window.api.restoreBackup(backupPath);
-      if (!result.success) {
-        addToast('Restore failed: ' + result.error, 'error');
-      }
-    } catch {}
+    setConfirmAction({
+      type: 'restore',
+      payload: { backupPath, name },
+      title: 'Restore Database',
+      message: `⚠️ WARNING: Restore from "${name}"?\n\nThis will OVERWRITE your current database. All unsynced local data will be LOST. The app will restart after restoring.`
+    });
   }
 
   async function handleRepair() {
-    if (!window.confirm("Attempt to repair database? This will run an integrity check and internal optimization (VACUUM/REINDEX).")) return;
-    try {
-      const res = await window.api.repairDb();
-      if (res.success) {
-        addToast("Database repair complete!", "success");
-        setDbHealth({ success: true });
-      } else {
-        addToast("Repair failed: " + res.error, "error");
-      }
-    } catch (e) {
-      addToast("Repair error", "error");
-    }
+    setConfirmAction({
+      type: 'repair',
+      title: 'Repair Database',
+      message: 'Attempt to repair database? This will run an integrity check and optimization (VACUUM/REINDEX). This may take a moment.'
+    });
   }
 
   async function handleCloudRecover() {
     if (!isOnline) { addToast('Offline. Connect to internet to recover.', 'error'); return; }
-    if (!window.confirm("⚠️ DISASTER RECOVERY: Download data from Cloud?\n\nThis will download missing products, sales, and suppliers from Supabase and merge them into your local records. Use this if you just switched computers or restored an old backup.")) return;
-    
-    setRecovering(true);
-    try {
-      const res = await window.api.pullFromCloud();
-      if (res.success) {
-        addToast(`Recovery complete! Pulled: ${Object.entries(res.pulled).map(([k, v]) => `${v} ${k}`).join(', ')}`, 'success');
-        loadData();
-      } else {
-        addToast("Recovery partial: " + (res.errors || []).join(', '), 'warning');
-      }
-    } catch (e) {
-      addToast("Cloud recovery failed", "error");
-    }
-    setRecovering(false);
+    setConfirmAction({
+      type: 'cloudRecover',
+      title: 'Disaster Recovery',
+      message: '⚠️ DISASTER RECOVERY: Download data from Cloud?\n\nThis will download missing products, sales, and suppliers from the Cloud and merge them into your local records. Use this if you just switched computers or restored an old backup.'
+    });
   }
+
+  const executeConfirmAction = async () => {
+    if (!confirmAction) return;
+    const { type, payload } = confirmAction;
+    setConfirmAction(null);
+
+    if (type === 'restore') {
+      try {
+        const result = await window.api.restoreBackup(payload.backupPath);
+        if (!result.success) addToast('Restore failed: ' + result.error, 'error');
+      } catch {}
+    } else if (type === 'repair') {
+      try {
+        const res = await window.api.repairDb();
+        if (res.success) {
+          addToast("Database repair complete!", "success");
+          setDbHealth({ success: true });
+        } else {
+          addToast("Repair failed: " + res.error, "error");
+        }
+      } catch (e) {
+        addToast("Repair error", "error");
+      }
+    } else if (type === 'cloudRecover') {
+      setRecovering(true);
+      try {
+        const res = await window.api.pullFromCloud();
+        if (res.success) {
+          addToast(`Recovery complete! Pulled: ${Object.entries(res.pulled).map(([k, v]) => `${v} ${k}`).join(', ')}`, 'success');
+          loadData();
+        } else {
+          addToast("Recovery partial: " + (res.errors || []).join(', '), 'warning');
+        }
+      } catch (e) {
+        addToast("Cloud recovery failed", "error");
+      }
+      setRecovering(false);
+    }
+  };
 
   const card = `rounded-2xl border shadow-sm ${dm ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`;
 
@@ -423,6 +446,17 @@ export default function SystemHealth() {
           </div>
         )}
       </div>
+      )}
+
+      {confirmAction && (
+        <ConfirmModal
+          isOpen={!!confirmAction}
+          title={confirmAction.title}
+          message={confirmAction.message}
+          onConfirm={executeConfirmAction}
+          onCancel={() => setConfirmAction(null)}
+          dm={dm}
+        />
       )}
     </div>
   );

@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Trash2, TrendingDown, Edit2, X, Check, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import DateRangePicker from '../components/DateRangePicker';
+import ConfirmModal from '../components/ConfirmModal';
 
 // --- Expenses are now managed via SQLite ---
 
@@ -128,6 +129,13 @@ export default function Expenses() {
   const [modal, setModal] = useState(null);
   const [catFilter, setCatFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const searchRef = useRef(null);
+
+  // Mount focus
+  useEffect(() => {
+    if (searchRef.current) searchRef.current.focus();
+  }, []);
 
   // Robust path to "YYYY-MM-DD" matching the date picker
   const toYMD = (d) => {
@@ -174,14 +182,27 @@ export default function Expenses() {
       setExpenses(prev => [{ ...entry, id: Date.now() }, ...prev]);
     }
     addToast(`Expense added: ₹${entry.amount.toLocaleString()}`, 'warning');
+    if (searchRef.current) searchRef.current.focus();
   };
 
-  const handleDelete = async (id, category) => {
+  const handleDelete = (id, category) => {
+    setConfirmDelete({ id, category });
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, category } = confirmDelete;
+    setConfirmDelete(null);
+
     if (window.api) {
       await window.api.deleteExpense(id);
     }
     setExpenses(prev => prev.filter(e => e.id !== id));
     addToast(`${category} expense removed`, 'info');
+    
+    setTimeout(() => {
+      if (searchRef.current) searchRef.current.focus();
+    }, 150);
   };
 
   const breakdown = useMemo(() => {
@@ -307,12 +328,29 @@ export default function Expenses() {
       {(modal === 'new' || (modal && modal.id)) && (
         <ExpenseModal 
           expense={modal === 'new' ? null : modal} 
-          onClose={() => setModal(null)} 
+          onClose={() => {
+            setModal(null);
+            setTimeout(() => searchRef.current?.focus(), 50);
+          }} 
           onSave={handleSave} 
           dm={dm} 
           categories={categories} 
           setExpenseCategories={setExpenseCategories} 
           addToast={addToast} 
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={!!confirmDelete}
+          title="Delete Expense"
+          message={`Are you sure you want to remove this ${confirmDelete.category} expense?`}
+          onConfirm={executeDelete}
+          onCancel={() => {
+            setConfirmDelete(null);
+            setTimeout(() => searchRef.current?.focus(), 100);
+          }}
+          dm={dm}
         />
       )}
     </div>

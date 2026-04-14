@@ -273,7 +273,7 @@ function AppContent() {
 
 
   return (
-    <Router>
+    <>
       <AutoLockWrapper>
         <Routes>
           <Route path="/" element={<Layout />}>
@@ -300,17 +300,19 @@ function AppContent() {
         </Routes>
         <UpdateNotifier />
       </AutoLockWrapper>
-    </Router>
+    </>
   );
 }
 
 function App() {
   return (
-    <AppProvider>
-      <LocalErrorBoundary>
-        <AppContent />
-      </LocalErrorBoundary>
-    </AppProvider>
+    <Router>
+      <AppProvider>
+        <LocalErrorBoundary>
+          <AppContent />
+        </LocalErrorBoundary>
+      </AppProvider>
+    </Router>
   );
 }
 

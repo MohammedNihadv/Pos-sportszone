@@ -43,7 +43,7 @@ function QuickAddModal({ onClose, onSave }) {
           {[['name','Product Name *'],['sku','SKU'],['price','Selling Price (₹) *'],['stock','Stock Qty']].map(([k,l]) => (
             <div key={k}>
               <label className="text-xs font-medium text-slate-500 mb-1 block uppercase tracking-wide">{l}</label>
-              <input value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+              <input value={form[k] || ''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
                 autoFocus={k === 'name'}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-sm transition-all" />
             </div>
@@ -303,6 +303,13 @@ function POSContent() {
     return () => window.removeEventListener('keydown', handler);
   }, [cart, showCheckout, clearCart]);
 
+  // Handle focus retention after cart changes or mount
+  useEffect(() => {
+    if (!showCheckout && !showAddModal && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [cart.length, showCheckout, showAddModal]);
+
   // Listen for the custom clear cart event from the Modal
   useEffect(() => {
     const handleClearCart = () => clearCart();
@@ -328,7 +335,7 @@ function POSContent() {
           <input
             ref={searchRef}
             type="text"
-            value={search}
+            value={search || ''}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search product name or SKU... (auto-focus)"
