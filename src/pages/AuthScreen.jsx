@@ -216,7 +216,7 @@ export default function AuthScreen({ onLogin, savedUsers = [], onLockMode = fals
 
         {/* Footer */}
         <p className="text-center text-[10px] text-blue-300/20 mt-6 tracking-wider">
-          SPORTS ZONE v3.0.6
+          SPORTS ZONE v4.1.9
         </p>
       </div>
     </div>

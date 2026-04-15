@@ -9,7 +9,7 @@ import getDb, {
   getUsers, updateUserPin, saveUser,
   getCustomers, saveCustomer, deleteCustomer,
   getCredits, saveCredit, deleteCredit,
-  clearAuditLogs, updateCustomerStats,
+  clearAuditLogs, adjustCustomerStats,
   runAggressiveMigrations
 } from './db.js';
 import { logError, logInfo, getRecentLogs } from './logger.js';
@@ -432,10 +432,11 @@ safeHandle('save-sale', (_, sale) => {
     const deductStock = db.prepare('UPDATE products SET stock = stock - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
 
     if (s.id) {
-      // 1. Get OLD items to restore stock
-      const oldSale = db.prepare('SELECT items FROM sales WHERE id = ?').get(s.id);
+      // 1. Get OLD sale for stock & customer reversal
+      const oldSale = db.prepare('SELECT items, total, customer_id FROM sales WHERE id = ?').get(s.id);
       if (oldSale) {
         try {
+          // Restore stock
           const oldItems = JSON.parse(oldSale.items || '[]');
           if (Array.isArray(oldItems)) {
             oldItems.forEach(item => {
@@ -444,14 +445,18 @@ safeHandle('save-sale', (_, sale) => {
               }
             });
           }
+          // Reverse customer stats
+          if (oldSale.customer_id) {
+            adjustCustomerStats(oldSale.customer_id, -oldSale.total, -1);
+          }
         } catch (e) { logError('RestoreStockEdit', e); }
       }
 
       // 2. Update the Sale
-      db.prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=?, date=?, updated_at = CURRENT_TIMESTAMP WHERE id=?')
-        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.id);
+      db.prepare('UPDATE sales SET total=?, discount=?, payment_method=?, amount_paid=?, change_amount=?, items=?, payment_breakdown=?, change_return_method=?, date=?, customer_id=?, updated_at = CURRENT_TIMESTAMP WHERE id=?')
+        .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.customerId || null, s.id);
       
-      // 3. Deduct stock for NEW items
+      // 3. Deduct stock & Add customer stats for NEW version
       if (s.items && Array.isArray(s.items)) {
         s.items.forEach(item => {
           if (item.id && !String(item.id).startsWith('manual')) {
@@ -459,13 +464,18 @@ safeHandle('save-sale', (_, sale) => {
           }
         });
       }
+      if (s.customerId) {
+        adjustCustomerStats(s.customerId, s.total, 1, saleDate);
+      }
 
-      logAudit('Updated Sale', `Sale ID ${s.id} updated and stock adjusted.`);
+      logAudit('Updated Sale', `Sale ID ${s.id} updated.`);
       return { id: s.id };
     } else {
       // New Sale logic
       const info = db.prepare('INSERT INTO sales (total, discount, payment_method, amount_paid, change_amount, items, payment_breakdown, change_return_method, date, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(s.total, s.discount, s.paymentMethod, s.amountPaid !== undefined ? s.amountPaid : s.total, s.changeAmount || 0, JSON.stringify(s.items), s.paymentBreakdown ? JSON.stringify(s.paymentBreakdown) : null, s.changeReturnMethod || null, saleDate, s.customerId || null);
+
+      const newId = info.lastInsertRowid;
 
       if (s.items && Array.isArray(s.items)) {
         s.items.forEach(item => {
@@ -476,12 +486,16 @@ safeHandle('save-sale', (_, sale) => {
       }
 
       // Update customer stats if linked
-      if (s.creditCustomer || s.customerName) {
+      if (s.customerId) {
+        adjustCustomerStats(s.customerId, s.total, 1, saleDate);
+      } else if (s.creditCustomer || s.customerName) {
+        // Fallback for names (legacy/credit)
         const cName = s.creditCustomer || s.customerName;
-        updateCustomerStats(cName, s.total, saleDate);
+        const c = db.prepare('SELECT id FROM customers WHERE name = ?').get(cName);
+        if (c) adjustCustomerStats(c.id, s.total, 1, saleDate);
       }
 
-      return { id: info.lastInsertRowid };
+      return { id: newId };
     }
   });
 
@@ -539,7 +553,7 @@ safeHandle('delete-sale', async (_, id) => {
   const db = getDb();
   
   const deleteAction = () => {
-    const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
+    const sale = db.prepare('SELECT items, total, customer_id FROM sales WHERE id = ?').get(id);
     if (!sale) return false;
     if (sale.is_deleted === 1) return true;
 
@@ -554,11 +568,17 @@ safeHandle('delete-sale', async (_, id) => {
           }
         });
       }
+      
+      // Reverse customer stats
+      if (sale.customer_id) {
+        adjustCustomerStats(sale.customer_id, -sale.total, -1);
+      }
+
       db.prepare('UPDATE sales SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
     });
 
     transaction();
-    logAudit('Deleted Sale', `Sale ID ${id} deleted and stock restored.`);
+    logAudit('Deleted Sale', `Sale ID ${id} deleted, stock and customer stats restored.`);
     return true;
   };
 

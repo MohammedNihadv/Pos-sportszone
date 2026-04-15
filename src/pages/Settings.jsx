@@ -469,7 +469,7 @@ export default function Settings() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className={`font-medium text-sm ${dm ? 'text-white' : 'text-slate-800'}`}>Software Maintenance</p>
-                <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Current Version: v3.0.6</p>
+                <p className={`text-xs ${dm ? 'text-slate-400' : 'text-slate-500'}`}>Current Version: v4.1.9</p>
               </div>
               <button
                 onClick={async () => {

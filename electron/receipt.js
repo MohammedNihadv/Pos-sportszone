@@ -128,7 +128,6 @@ export function generateReceiptHTML(sale, settings = {}) {
   <div class="totals-box">
     <div class="total-row"><span>Subtotal</span><span>₹${subtotal.toLocaleString()}</span></div>
     ${discount > 0 ? `<div class="total-row" style="color:#ef4444;"><span>Discount</span><span>-₹${discount.toLocaleString()}</span></div>` : ''}
-    ${Math.abs(adjustment) > 0.1 ? `<div class="total-row adjustment"><span>Adjustment</span><span>${adjustment > 0 ? '+' : ''}₹${adjustment.toLocaleString()}</span></div>` : ''}
     ${cgstRateRaw > 0 ? `<div class="total-row"><span>CGST (${cgstRateRaw}%)</span><span>₹${cgst.toFixed(2)}</span></div>` : ''}
     ${sgstRateRaw > 0 ? `<div class="total-row"><span>SGST (${sgstRateRaw}%)</span><span>₹${sgst.toFixed(2)}</span></div>` : ''}
     <div class="total-row grand-total"><span>Total</span><span>₹${grandTotal.toLocaleString()}</span></div>

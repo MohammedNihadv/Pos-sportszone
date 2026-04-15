@@ -509,25 +509,18 @@ export function saveCustomer(c) {
   }
 }
 
-export function updateCustomerStats(nameOrId, amount, date) {
+export function adjustCustomerStats(customerId, amountDelta, orderDelta = 0, date = null) {
   const db = getDb();
-  let customer;
-  if (typeof nameOrId === 'number') {
-    customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(nameOrId);
-  } else {
-    customer = db.prepare('SELECT id FROM customers WHERE name = ?').get(nameOrId);
-  }
+  if (!customerId) return;
 
-  if (customer) {
-    db.prepare(`
-      UPDATE customers 
-      SET orders = orders + 1, 
-          total = total + ?, 
-          last_order = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(amount, date, customer.id);
-  }
+  db.prepare(`
+    UPDATE customers 
+    SET orders = orders + ?, 
+        total = total + ?, 
+        last_order = COALESCE(?, last_order),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(orderDelta, amountDelta, date, customerId);
 }
 
 export function deleteCustomer(id) {

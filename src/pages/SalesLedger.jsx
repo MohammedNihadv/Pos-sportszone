@@ -167,7 +167,7 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
 }
 
 export default function SalesLedger() {
-  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked, refreshProducts } = useApp();
+  const { darkMode, addToast, sales: liveSales, setSales: setLiveSales, isOwner, isAdminUnlocked, refreshProducts, refreshSales } = useApp();
   const showFinancials = isAdminUnlocked || isOwner;
   const dm = darkMode;
 
@@ -179,19 +179,22 @@ export default function SalesLedger() {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  // Map live POS sales to ledger format + allow manual entries
-  const [manualSales, setManualSales] = useState([]);
+  // Process all sales from context
   const allSales = useMemo(() => {
-    const liveEntries = (liveSales || []).map(s => {
+    return (liveSales || []).map(s => {
       const d = new Date(s.date || s.created_at || new Date());
       const isValid = !isNaN(d.getTime());
+      
+      // Determine if it was POS live or manual ledger entry based on items
+      const isActuallyManual = s.items?.some(i => String(i.id).startsWith('manual'));
+      
       return {
-        id: `live-${s.id}`,
+        id: s.id,
         rawDate: isValid ? d : new Date(),
         date: isValid ? d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Invalid Date',
-        inv: `INV-${s.id}`,
-        description: (s.items || []).map(i => `${i.name} x${i.qty}`).join(', '),
-        cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * i.qty), 0),
+        inv: (s.items?.length === 1 && String(s.items[0].id).startsWith('manual')) ? s.inv : `INV-${s.id}`,
+        description: (s.items || []).map(i => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ''}`).join(', '),
+        cost: (s.items || []).reduce((t, i) => t + ((i.cost || 0) * (i.qty || 1)), 0),
         selling: s.total || 0,
         discount: s.discount || 0,
         payment_method: s.paymentMethod || s.payment_method || 'cash',
@@ -200,15 +203,11 @@ export default function SalesLedger() {
         paymentBreakdown: s.paymentBreakdown || s.payment_breakdown || [{ method: s.paymentMethod || s.payment_method || 'cash', amount: s.amountPaid || s.amount_paid || s.total || 0}],
         changeReturnMethod: s.changeReturnMethod || s.change_return_method || 'cash',
         items: (s.items || []).length,
-        isLive: true,
+        isLive: !isActuallyManual,
+        originalSale: s
       };
-    });
-    const manualEntries = manualSales.map(m => {
-      const d = new Date(m.date || new Date());
-      return { ...m, rawDate: !isNaN(d.getTime()) ? d : new Date() };
-    });
-    return [...liveEntries, ...manualEntries].sort((a,b) => b.rawDate - a.rawDate);
-  }, [liveSales, manualSales]);
+    }).sort((a,b) => b.rawDate - a.rawDate);
+  }, [liveSales]);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -244,25 +243,24 @@ export default function SalesLedger() {
   }), { cost: 0, selling: 0, profit: 0, paid: 0 }), [filtered]);
 
   const handleSave = async (entry) => {
+    const isEditing = !!entry.originalSale || !!entry.id;
+    let saleToSave;
+
     if (entry.isLive) {
-      const realId = parseInt(String(entry.id).replace('live-', ''), 10);
-      const orig = liveSales.find(s => s.id === realId);
+      const orig = entry.originalSale || liveSales.find(s => s.id === entry.id);
       if (orig) {
         const currentDescription = (orig.items || []).map(i => `${i.name} x${i.qty}`).join(', ');
         let updatedItems = orig.items;
 
-        // If description was edited, we treat it as a manual correction so receipts match
         if (entry.description !== currentDescription) {
            updatedItems = [{
-             id: 'manual',
+             id: `manual-edit-${Date.now()}`,
              name: entry.description,
              qty: 1,
-             price: entry.selling,
+             price: parseFloat(entry.selling) + parseFloat(entry.discount || 0),
              cost: entry.cost
            }];
-        } else if (parseFloat(entry.selling) !== parseFloat(orig.total) || parseFloat(entry.discount) !== parseFloat(orig.discount || 0)) {
-           // If price OR discount was edited but NOT description, we update item prices proportionally
-           // This ensures (sum of items) == total + discount, so no "Adjustment" shows on receipt
+        } else {
            const targetSubtotal = parseFloat(entry.selling) + parseFloat(entry.discount || 0);
            const currentSubtotal = (orig.items || []).reduce((s, i) => s + (i.price * i.qty), 0);
            
@@ -272,8 +270,6 @@ export default function SalesLedger() {
                ...item,
                price: parseFloat((item.price * ratio).toFixed(2))
              }));
-             
-             // Fix rounding mismatch so it matches exactly
              const newTotal = updatedItems.reduce((s, i) => s + (i.price * i.qty), 0);
              const diff = targetSubtotal - newTotal;
              if (Math.abs(diff) > 0.01 && updatedItems.length > 0) {
@@ -282,7 +278,7 @@ export default function SalesLedger() {
            }
         }
 
-        const updated = {
+        saleToSave = {
            ...orig,
            total: entry.selling,
            discount: entry.discount,
@@ -294,31 +290,48 @@ export default function SalesLedger() {
            date: entry.date,
            items: updatedItems
         };
-        if (window.api) {
-          try {
-            await window.api.saveSale(updated);
-            if (refreshProducts) await refreshProducts();
-            const fresh = await window.api.getSales();
-            setLiveSales(fresh);
-            addToast(`Live Sale ${entry.inv || 'Entry'} perfectly updated!`, 'success');
-          } catch (err) {
-            console.error('Update failed:', err);
-            addToast(`Update Failed: ${err.message}`, 'error');
-          }
-        } else {
-           setLiveSales(prev => prev.map(s => s.id === realId ? updated : s));
-        }
       }
-      return;
+    } else {
+      // Manual Entry or previously saved manual entry
+      saleToSave = {
+        id: entry.id && !String(entry.id).startsWith('live-') ? entry.id : undefined,
+        inv: entry.inv,
+        total: entry.selling,
+        discount: entry.discount,
+        paymentMethod: entry.payment_method,
+        amountPaid: entry.amountPaid,
+        changeAmount: entry.changeAmount,
+        paymentBreakdown: entry.paymentBreakdown,
+        changeReturnMethod: entry.changeReturnMethod,
+        date: entry.date,
+        items: [{
+          id: `manual-${Date.now()}`,
+          name: entry.description,
+          qty: 1,
+          price: parseFloat(entry.selling) + parseFloat(entry.discount || 0),
+          cost: entry.cost
+        }]
+      };
     }
 
-    const exists = manualSales.find(s => s.id === entry.id);
-    if (exists) {
-      setManualSales(prev => prev.map(s => s.id === entry.id ? entry : s));
-      addToast(`Manual Sale ${entry.inv || '#'} updated`, 'success');
-    } else {
-      setManualSales(prev => [{ ...entry, isManual: true }, ...prev]);
-      addToast(`Sale ${entry.inv || '#'} added — Profit ₹${(entry.selling - entry.cost).toFixed(0)}`, 'success');
+    if (window.api && saleToSave) {
+      try {
+        await window.api.saveSale(saleToSave);
+        if (refreshProducts) await refreshProducts();
+        if (refreshSales) await refreshSales();
+        addToast(isEditing ? `Sale entry updated!` : `Manual sale added!`, 'success');
+      } catch (err) {
+        console.error('Save failed:', err);
+        addToast(`Save Failed: ${err.message}`, 'error');
+      }
+    } else if (!window.api && saleToSave) {
+       // Browser fallback
+       if (isEditing) {
+         setLiveSales(prev => prev.map(s => s.id === saleToSave.id ? saleToSave : s));
+       } else {
+         setLiveSales(prev => [{ ...saleToSave, id: Date.now() }, ...prev]);
+       }
+       addToast(`Browser Mode: Sale saved to UI.`, 'success');
     }
   };
 
@@ -334,25 +347,19 @@ export default function SalesLedger() {
     // Close modal immediately to restore event loop
     setConfirmDelete(null);
 
-    if (String(id).startsWith('live-')) {
-      const realId = parseInt(String(id).replace('live-', ''), 10);
+    if (window.api) {
       try {
-        if (window.api) {
-          await window.api.deleteSale(realId);
-          if (refreshProducts) await refreshProducts();
-          setLiveSales(prev => prev.filter(s => s.id !== realId));
-          addToast(`POS Sale ${inv} permanently deleted & stock restored!`, 'success');
-        } else {
-          setLiveSales(prev => prev.filter(s => s.id !== realId));
-          addToast(`Browser Mode: Sale ${inv} deleted from UI.`, 'success');
-        }
+        await window.api.deleteSale(id);
+        if (refreshProducts) await refreshProducts();
+        if (refreshSales) await refreshSales();
+        addToast(`Sale ${inv || 'Entry'} deleted & stock updated (if applicable).`, 'success');
       } catch (err) {
         console.error('Delete failed:', err);
         addToast(`Delete Failed: ${err.message}`, 'error');
       }
     } else {
-      setManualSales(prev => prev.filter(s => s.id !== id));
-      addToast(`${inv || 'Entry'} deleted`, 'warning');
+      setLiveSales(prev => prev.filter(s => s.id !== id));
+      addToast(`Browser Mode: Entry deleted from UI.`, 'warning');
     }
     
     // CRITICAL: Refocus search bar using a reliable delay.

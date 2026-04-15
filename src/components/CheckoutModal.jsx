@@ -251,8 +251,8 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       const sgstPct = parseFloat(appSettings?.sgstRate) || 0;
       const taxPct = cgstPct + sgstPct;
       const grandTotal = sale.total || 0;
-      const taxableAmount = taxPct > 0 ? grandTotal / (1 + (taxPct / 100)) : grandTotal;
-      const gstAmt = grandTotal - taxableAmount;
+      const itemsSubtotal = (sale.items || []).reduce((sum, i) => sum + (i.price * i.qty), 0);
+      const gstAmt = taxPct > 0 ? grandTotal - (grandTotal / (1 + (taxPct / 100))) : 0;
       
       let msg = `*${(appSettings?.businessName || 'SPORTS ZONE').toUpperCase()}*\n\n`;
       msg += `Invoice: #${sale.id || 'NEW'}\n`;
@@ -265,7 +265,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       });
       
       msg += `\n--------------------------------\n`;
-      msg += `Subtotal: ₹${taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
+      msg += `Subtotal: ₹${itemsSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
       
       if (taxPct > 0) {
         msg += `GST (${taxPct}%): ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\n`;
@@ -286,7 +286,7 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       msg += `We look forward to serving you again.\n\n`;
       msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
       if (appSettings?.businessPhone) {
-        msg += `📞 +91${String(appSettings.businessPhone).replace(/^\+91/, '')}`;
+        msg += `+91${String(appSettings.businessPhone).replace(/^\+91/, '')}`;
       }
       
       let cleanPhone = phone.replace(/\D/g, '');
