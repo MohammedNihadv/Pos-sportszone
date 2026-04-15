@@ -1,0 +1,75 @@
+﻿
+> pos-system@4.1.7 build:exe
+> npm run build:react && electron-builder --win
+
+
+> pos-system@4.1.7 build:react
+> vite build
+
+[36mvite v8.0.1 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...Γ£ô 2723 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                             0.79 kB Γöé gzip:   0.38 kB
+dist/assets/index-D-pymWIR.css             59.26 kB Γöé gzip:  10.10 kB
+dist/assets/rolldown-runtime-COnpUsM8.js    0.81 kB Γöé gzip:   0.46 kB
+dist/assets/vendor-motion-DOxwNIAa.js     124.77 kB Γöé gzip:  40.76 kB
+dist/assets/vendor-react-C2J6JfVc.js      219.40 kB Γöé gzip:  70.34 kB
+dist/assets/index-DqTTI6xb.js             294.17 kB Γöé gzip:  64.61 kB
+dist/assets/vendor-charts-CuO-05jB.js     395.21 kB Γöé gzip: 113.80 kB
+
+[32mΓ£ô built in 1.47s[39m
+  ΓÇó electron-builder  version=26.8.1 os=10.0.26200
+  ΓÇó loaded configuration  file=package.json ("build" field)
+  ΓÇó @electron/rebuild already used by electron-builder, please consider to remove excess dependency from devDependencies
+
+To ensure your native dependencies are always matched electron version, simply add script `"postinstall": "electron-builder install-app-deps" to your `package.json`
+  ΓÇó executing @electron/rebuild  electronVersion=41.0.4 arch=x64 buildFromSource=false workspaceRoot=C:\Users\mhdni\Desktop\Pos-system projectDir=./ appDir=./
+  ΓÇó installing native dependencies  arch=x64
+  ΓÇó preparing       moduleName=better-sqlite3 arch=x64
+  ΓÇó finished        moduleName=better-sqlite3 arch=x64
+  ΓÇó completed installing native dependencies
+  ΓÇó packaging       platform=win32 arch=x64 electron=41.0.4 appOutDir=dist-electron\win-unpacked
+  ΓÇó searching for node modules  pm=npm searchDir=C:\Users\mhdni\Desktop\Pos-system
+node.exe : (node:7892) 
+[DEP0190] 
+DeprecationWarning: 
+Passing args to a child 
+process with shell 
+option true can lead to 
+security 
+vulnerabilities, as the 
+arguments are not 
+escaped, only 
+concatenated.
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo       
+       : NotSpecified:   
+  ((node:7892) [DE...y   
+  concatenated.:Strin    
+g) [], RemoteExcepti    
+on
+    + FullyQualifiedErro 
+   rId : NativeCommandE  
+  rror
+ 
+(Use `node 
+--trace-deprecation ...` 
+to show where the 
+warning was created)
+  ΓÇó duplicate dependency references  dependencies=["once@1.4.0","once@1.4.0","pump@3.0.4","readable-stream@3.6.2","end-of-stream@1.4.5","react-dom@19.2.4","react-dom@19.2.4","react-dom@19.2.4","react-redux@9.2.0","react-dom@19.2.4","d3-array@3.2.4","d3-interpolate@3.0.1","d3-time@3.1.0","d3-time@3.1.0","d3-array@3.2.4"]
+  ΓÇó updating asar integrity executable resource  executablePath=dist-electron\win-unpacked\Sports Zone.exe
+  ΓÇó signing with signtool.exe  path=dist-electron\win-unpacked\Sports Zone.exe
+  ΓÇó building        target=nsis file=dist-electron\Sports Zone Setup 4.1.7.exe archs=x64 oneClick=false perMachine=true
+  ΓÇó signing with signtool.exe  path=dist-electron\win-unpacked\resources\elevate.exe
+  ΓÇó signing with signtool.exe  path=dist-electron\Sports Zone Setup 4.1.7.__uninstaller.exe
+  ΓÇó signing with signtool.exe  path=dist-electron\Sports Zone Setup 4.1.7.exe
+  ΓÇó building block map  blockMapFile=dist-electron\Sports Zone Setup 4.1.7.exe.blockmap

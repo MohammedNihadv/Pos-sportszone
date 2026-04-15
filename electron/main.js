@@ -812,11 +812,12 @@ safeHandle('download-receipt-png', async (_, sale) => {
 
 safeHandle('open-external-url', async (_, url) => {
   try {
+    logInfo('OpenExternal', `Opening URL (${url.length} chars): ${url.substring(0, 120)}...`);
     await shell.openExternal(url);
     return true;
   } catch (err) {
-    logError('OpenExternal', err);
-    return false;
+    logError('OpenExternal', `Failed to open URL (${url.length} chars): ${err.message}`);
+    throw err; // Re-throw so frontend catch block fires
   }
 });
 

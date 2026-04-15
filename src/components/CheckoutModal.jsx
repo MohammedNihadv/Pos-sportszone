@@ -292,16 +292,23 @@ export default function CheckoutModal({ onClose, onComplete, dm }) {
       let cleanPhone = phone.replace(/\D/g, '');
       if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
       
-      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+      const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
       
+      let opened = false;
       if (window.api?.openExternal) {
-        await window.api.openExternal(waUrl);
-      } else {
+        try {
+          await window.api.openExternal(waUrl);
+          opened = true;
+        } catch (e) {
+          console.warn('openExternal failed, trying window.open fallback:', e);
+        }
+      }
+      if (!opened) {
         window.open(waUrl, '_blank');
       }
       setWhatsappModal({ open: false, phone: '' });
     } catch (err) {
-      addToast('Failed to open WhatsApp', 'error');
+      addToast(`Failed to open WhatsApp: ${err.message || 'Unknown error'}`, 'error');
       console.error(err);
     }
   };
