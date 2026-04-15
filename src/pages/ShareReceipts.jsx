@@ -138,7 +138,7 @@ export default function ShareReceipts() {
       msg += `We look forward to serving you again.\n\n`;
       msg += `${appSettings?.businessName || 'Sports Zone'}\n`;
       if (appSettings?.businessPhone) {
-        msg += `📞 +91${appSettings.businessPhone.replace('+91', '')}`;
+        msg += `📞 +91${String(appSettings.businessPhone).replace(/^\+91/, '')}`;
       }
       
       let cleanPhone = phone.replace(/\D/g, '');
