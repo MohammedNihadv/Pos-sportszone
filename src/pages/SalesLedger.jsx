@@ -55,7 +55,8 @@ function SaleModal({ sale, onClose, onSave, dm, showFinancials }) {
   const inputCls = `w-full px-3 py-2.5 rounded-lg text-sm border outline-none transition-all ${dm ? 'bg-slate-800 border-slate-600 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`;
   const labelCls = `text-xs font-semibold uppercase tracking-wide mb-1 block ${dm ? 'text-slate-400' : 'text-slate-500'}`;
   const profit = parseFloat(form.selling || 0) - parseFloat(form.cost || 0);
-  const pct = form.cost && form.selling ? ((profit / parseFloat(form.cost)) * 100).toFixed(1) : 0;
+  const costVal = parseFloat(form.cost) || 0;
+  const pct = costVal > 0 && form.selling ? ((profit / costVal) * 100).toFixed(1) : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto py-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -440,7 +441,7 @@ export default function SalesLedger() {
             <tbody className={`divide-y ${dm ? 'divide-slate-700' : 'divide-slate-100'}`}>
               {filtered.map(s => {
                 const profit = s.selling - s.cost;
-                const pct = ((profit / s.cost) * 100).toFixed(1);
+                const pct = s.cost > 0 ? ((profit / s.cost) * 100).toFixed(1) : null;
                 return (
                   <tr key={s.id} className={`transition-colors ${dm ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}>
                     <td className={`px-4 py-3.5 ${dm ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -457,7 +458,10 @@ export default function SalesLedger() {
                     {showFinancials && <td className={`px-4 py-3.5 text-right font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>₹{profit.toLocaleString()}</td>}
                     {showFinancials && (
                       <td className="px-4 py-3.5 text-right">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
+                        {pct !== null
+                          ? <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{pct}%</span>
+                          : <span className="text-xs text-slate-400">—</span>
+                        }
                       </td>
                     )}
                     <td className={`px-4 py-3.5 text-right font-bold ${dm ? 'text-emerald-400' : 'text-emerald-600'}`}>₹{s.amountPaid?.toLocaleString() || s.selling.toLocaleString()}</td>
